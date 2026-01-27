@@ -3,7 +3,7 @@ A platform for students to post and find subleases.
 
 
 ## VENV Installation:
-# Navigate to your backend folder
+### Navigate to your backend folder
 cd sublea
 cd backend
 
