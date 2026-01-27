@@ -1,7 +1,10 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.declarative import declarative_base
+from dotenv import load_dotenv
 
+load_dotenv()
 '''
 Database configuration and session management using SQLAlchemy.
 Soon to be changed to AWS RDS Postgres instance.
@@ -10,15 +13,17 @@ Soon to be changed to AWS RDS Postgres instance.
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", # to be implemented in production
-    "sqlite:///./test.db" #local dev for fallback
 )
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set.")
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  # Enable SQL query logging for debugging
-    connect_args={"check_same_thread": False}
-    if DATABASE_URL.startswith("sqlite") 
-    else {}
+    pool_pre_ping=True,
+    pool_size=5,
+    echo=False,  # Enable SQL query logging for debugging
+    max_overflow=10
 )
 
 SessionLocal = sessionmaker(

@@ -19,3 +19,4 @@ aws-xray-sdk==2.12.1
 uvicorn
 sqlalchemy
 pydantic 
+python-dotenv
