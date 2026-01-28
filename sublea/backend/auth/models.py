@@ -14,6 +14,18 @@ class User(Base):
     password_hash = Column(String, nullable=False) # hashed password for security
     is_verified = Column(Boolean, default=False) # supports .edu verification process
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
+    gender = Column(String(10), nullable=True)
+    age = Column(Integer, nullable=True)
+    gender_preference = Column(String(10), nullable=True)
+    age_preference_min = Column(Integer, nullable=True)
+    age_preference_max = Column(Integer, nullable=True)
+    cleaning_habit = Column(String(20), nullable=True)
+    smoking_habit = Column(String(20), nullable=True)
+    pet_preference = Column(String(20), nullable=True)
+    drinking_habit = Column(String(20), nullable=True)
+    noise_tolerance = Column(String(20), nullable=True)
+    profile_picture = Column(String(200), nullable=True)  # URL to profile picture
+    bio = Column(Text, nullable=True)
 
     listings = relationship("Listing", back_populates="owner", cascade="all, delete-orphan")
     messages_sent = relationship("Message", back_populates="sender", foreign_keys='Message.sender_id', cascade="all, delete-orphan")
@@ -43,12 +55,13 @@ class Listing(Base):
     images = Column(Text, nullable=True)  # Comma-separated image URLs
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+    anonymous_lister = Column(Boolean, default=False, nullable=False)
 
     owner = relationship("User", back_populates="listings")
     messages = relationship("Message", back_populates="listing", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Listing(id={self.id}, title={self.title}, rent={self.rent}, address={self.address})>"
+        return f"<Listing(id={self.id}, title={self.title}, rent={self.rent}, address={self.address}, anonymous_lister={self.anonymous_lister})>"
     
 class Message(Base):
     __tablename__ = "messages"
