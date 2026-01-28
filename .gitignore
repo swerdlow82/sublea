@@ -144,8 +144,10 @@ vite.config.ts.timestamp-*
 ############################
 
 # Virtual environments
+.venv/
 venv/
 backend/venv/
+backend/.venv/
 .env/
 .env.*
 
