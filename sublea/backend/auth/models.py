@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -53,7 +53,7 @@ class Listing(Base):
     available_from = Column(DateTime, nullable=False)
     available_to = Column(DateTime, nullable=True)
     images = Column(Text, nullable=True)  # Comma-separated image URLs
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     anonymous_lister = Column(Boolean, default=False, nullable=False)
 
@@ -71,7 +71,7 @@ class Message(Base):
     recipient_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     listing_id = Column(Integer, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
-    sent_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     read = Column(Boolean, default=False, nullable=False)
 
     sender = relationship("User", back_populates="messages_sent", foreign_keys=[sender_id])
@@ -91,7 +91,7 @@ class Verification(Base):
     code = Column(String(6), nullable=False)  # e.g., 6-digit verification code
     expires_at = Column(DateTime(timezone=True), nullable=False)
     verified = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
 
     user = relationship("User", back_populates="verifications")
