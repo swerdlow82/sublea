@@ -20,3 +20,6 @@ uvicorn
 sqlalchemy
 pydantic 
 python-dotenv
+
+# for SQLAlchemy <-> AWS Postgre
+psycopg2-binary
