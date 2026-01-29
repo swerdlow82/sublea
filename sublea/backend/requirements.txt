@@ -20,4 +20,4 @@ uvicorn
 sqlalchemy
 pydantic 
 python-dotenv
-psycog2-binary==2.9.11
+psycopg2-binary==2.9.11
