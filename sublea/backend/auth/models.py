@@ -14,9 +14,9 @@ class User(Base):
     password_hash = Column(String, nullable=False) # hashed password for security
     is_verified = Column(Boolean, default=False) # supports .edu verification process
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
-    gender = Column(String(10), nullable=True)
+    gender = Column(String(20), nullable=True)
     age = Column(Integer, nullable=True)
-    gender_preference = Column(String(10), nullable=True)
+    gender_preference = Column(String(50), nullable=True)
     age_preference_min = Column(Integer, nullable=True)
     age_preference_max = Column(Integer, nullable=True)
     cleaning_habit = Column(String(20), nullable=True)
@@ -33,6 +33,7 @@ class User(Base):
     messages_sent = relationship("Message", back_populates="sender", foreign_keys='Message.sender_id', cascade="all, delete-orphan")
     messages_received = relationship("Message", back_populates="recipient", foreign_keys='Message.recipient_id', cascade="all, delete-orphan")
     verifications = relationship("Verification", back_populates="user", cascade="all, delete-orphan")
+    
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, is_verified={self.is_verified})>"
