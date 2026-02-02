@@ -5,7 +5,7 @@ from sqlalchemy import func
 from database import Base, engine, get_db
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import random
 from dotenv import load_dotenv
@@ -64,7 +64,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     code = generate_verification_code()
-    verification = Verification(user_id=new_user.id, code=code, created_at=func.now() + timedelta(minutes=15), verified=False)
+    verification = Verification(user_id=new_user.id, code=code, expires_at=func.now() + timedelta(minutes=15), verified=False)
     db.add(verification)
     db.commit()
 
@@ -90,7 +90,7 @@ def verify_code(verification_data: VerificationCodeValidate, db: Session = Depen
     if not verification:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No verification code found. Please request a new one.")
     
-    if func.now() > verification.expires_at:
+    if datetime.now(timezone.utc) > verification.expires_at:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code has expired. Please request a new one.")
     
     if verification.code != verification_data.code:
