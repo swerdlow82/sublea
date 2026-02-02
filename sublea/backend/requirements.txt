@@ -21,3 +21,4 @@ sqlalchemy
 pydantic 
 python-dotenv
 psycog2-binary==2.9.11
+bcrypt==4.0.1
