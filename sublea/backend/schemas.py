@@ -1,3 +1,4 @@
+import token
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Literal
 from datetime import datetime
@@ -20,6 +21,8 @@ class UserCreate(BaseModel):
                 "gender_preference": "No preference"
             }
         }
+
+
 
 class UserResponse(BaseModel):
     id: int
@@ -58,3 +61,38 @@ class VerificationCodeValidate(BaseModel):
                 "email": "student@uoregon.edu"
             }
         }
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "student@uoregon.edu"
+            }
+        }
+
+class PasswordResetRequest(BaseModel):
+    token: str
+    email: EmailStr
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "reset-token-123",
+                "email": "student@uoregon.edu"
+            }
+        }
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=64)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "reset-token-123",
+                "new_password": "newstrongpassword123"
+            }
+        }
+    
