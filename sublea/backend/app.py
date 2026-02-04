@@ -11,8 +11,9 @@ import random
 from dotenv import load_dotenv
 
 from auth.models import User, Listing, Message, Verification
-from schemas import UserCreate, UserResponse, UserLogin, Token, VerificationCodeValidate
+from schemas import UserCreate, UserResponse, UserLogin, Token, VerificationCodeValidate, ResendVerificationRequest, PasswordResetRequest, PasswordResetConfirm
 from auth_utils import *
+from email_service import email_service
 
 
 load_dotenv()
@@ -40,13 +41,6 @@ def root():
 def generate_verification_code():
     return f"{random.randint(100000, 999999)}"
 
-def send_verification_email(email: str, code: str):
-    # Placeholder function to simulate sending an email
-    is_edu = is_edu_email(email)
-    edu_message = ""
-    if is_edu:
-        edu_message = "\n Verifying your .edu email will give you a Verified badge on your profile!"
-    print(f"Sending verification code {code} to {email}.{edu_message}")
 
 
 @app.post("/api/pages/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -68,7 +62,9 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     db.add(verification)
     db.commit()
 
-    send_verification_email(new_user.email, code)
+    email_sent = email_service.send_verification_email(new_user.email, code)
+    if not email_sent:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.")
 
     access_token = create_access_token(data={"user_id": new_user.id, "email": new_user.email})
     return {
@@ -107,6 +103,78 @@ def verify_code(verification_data: VerificationCodeValidate, db: Session = Depen
     return UserResponse.from_orm(user)
 
 
+@app.post("/api/pages/resend-verification")
+def resend_verification(
+    request_data: ResendVerificationRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    Resend verification code to user's email
+    Only works for .edu emails
+    """
+    # Verify it's a .edu email
+    if not is_edu_email(request_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .edu email addresses can be verified."
+        )
+    
+    # Find user
+    user = db.query(User).filter(User.email == request_data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="User not found."
+        )
+    
+    # Check if already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Email already verified."
+        )
+    
+    # Check rate limiting - only allow resend if last code was created >1 minute ago
+    recent_verification = db.query(Verification)\
+        .filter(Verification.user_id == user.id)\
+        .order_by(Verification.created_at.desc())\
+        .first()
+    
+    if recent_verification:
+        time_since_last = datetime.now(timezone.utc) - recent_verification.created_at
+        if time_since_last < timedelta(minutes=1):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Please wait {60 - int(time_since_last.total_seconds())} seconds before requesting a new code."
+            )
+    
+    # Generate new verification code
+    code = generate_verification_code()
+    
+    verification = Verification(
+        user_id=user.id,
+        code=code,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+        verified=False
+    )
+    db.add(verification)
+    db.commit()
+    
+    # Send verification email
+    email_sent = email_service.send_verification_email(user.email, code)
+    
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email. Please try again later."
+        )
+    
+    return {
+        "message": "Verification code sent successfully.",
+        "email": user.email
+    }
+
+
 @app.post("/api/pages/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_data.email).first()
@@ -119,6 +187,26 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": UserResponse.from_orm(user)
     }
+@app.post("/api/pages/password-reset-request")
+def password_reset_request(request_data: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == request_data.email).first()
+    if not user:
+         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    request_data.token = create_access_token(data={"sub": str(user.id)}, expires_delta=timedelta(minutes=15))
+    reset_email = email_service.send_password_reset_email(user.email, request_data.token)
+    if not reset_email:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send password reset email.")
+    return {"message": "Password reset email sent successfully.", "email": user.email}
+
+@app.post("/api/pages/password-reset-confirm")
+def password_reset_confirm(confirm_data: PasswordResetConfirm, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == confirm_data.email).first()
+    if not user:
+         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    hashed_password = hash_password(confirm_data.new_password)
+    user.password_hash = hashed_password
+    db.commit()
+    return UserResponse.from_orm(user)
 
 @app.get("/pages/login")
 def login_page():
