@@ -11,9 +11,10 @@ import random
 from dotenv import load_dotenv
 
 from auth.models import User, Listing, Message, Verification
-from schemas import UserCreate, UserResponse, UserLogin, Token, VerificationCodeValidate, ResendVerificationRequest, PasswordResetRequest, PasswordResetConfirm
+from schemas import UserCreate, UserResponse, UserLogin, Token, VerificationCodeValidate, ResendVerificationRequest, PasswordResetRequest, PasswordResetConfirm, ListingCreate, ListingResponse
 from auth_utils import *
 from email_service import email_service
+from google_maps_utils import get_coordinates
 
 
 load_dotenv()
@@ -52,7 +53,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     is_verified = is_edu_email(user_data.email)
 
     hashed_password = hash_password(user_data.password)
-    new_user = User(email=user_data.email, password_hash=hashed_password, is_verified=False, age=user_data.age, gender=user_data.gender, gender_preference=user_data.gender_preference)
+    new_user = User(email=user_data.email, password_hash=hashed_password, is_verified=False, age=user_data.age, gender=user_data.gender, gender_preference=user_data.gender_preference, first_name=user_data.first_name, last_name=user_data.last_name)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -231,6 +232,52 @@ def edit_profile_page():
 @app.get("/pages/listings")
 def listings_page():
     return {"message": "This is the listings page."}
+
+@app.post("/api/pages/listings")
+def create_listing(user_data: ListingCreate, db: Session = Depends(get_db)):
+    if not db.query(User).filter(User.id == user_data.user_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user = db.query(User).filter(User.id == user_data.user_id).first()
+    if user.is_verified == False:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User email not verified.")
+    
+    if user_data.anonymous_lister == False:
+        if not user.first_name or not user.last_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="First and last name required for non-anonymous listings.")
+        user_data.lister_first_name = user.first_name
+        user_data.lister_last_name = user.last_name
+
+    coords = get_coordinates(user_data.address, user_data.city, user_data.state, user_data.zip_code, user_data.country)
+    if coords:
+        latitude, longitude = coords
+    else:
+        latitude, longitude = None, None
+    new_listing = Listing(
+        user_id=user_data.user_id,
+        title=user_data.title,
+        lister_first_name=user_data.lister_first_name,
+        lister_last_name=user_data.lister_last_name,
+        description=user_data.description,
+        rent=user_data.rent,
+        address=user_data.address,
+        zip_code=user_data.zip_code,
+        city=user_data.city,
+        state=user_data.state,
+        country=user_data.country,
+        latitude=latitude,
+        longitude=longitude,
+        bedrooms=user_data.bedrooms,
+        bathrooms=user_data.bathrooms,
+        roommate_count=user_data.roommate_count,
+        available_from=user_data.available_from,
+        available_to=user_data.available_to,
+        images = ",".join(user_data.images) if isinstance(user_data.images, list) else user_data.images,
+        anonymous_lister=user_data.anonymous_lister
+    )
+    db.add(new_listing)
+    db.commit()
+    db.refresh(new_listing)
+    return ListingResponse.from_orm(new_listing)
 
 @app.get("/pages/listings/new")
 def new_listing_page():
