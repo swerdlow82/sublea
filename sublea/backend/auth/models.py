@@ -12,6 +12,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True) #internal user ID
     email = Column(String, unique=True, index=True, nullable=False) # login credential, user unique
     password_hash = Column(String, nullable=False) # hashed password for security
+    first_name = Column(String(50), nullable=True)
+    last_name = Column(String(50), nullable=True)
     is_verified = Column(Boolean, default=False) # supports .edu verification process
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
     gender = Column(String(20), nullable=True)
@@ -48,6 +50,10 @@ class Listing(Base):
     description = Column(Text, nullable=False)
     rent = Column(Float, nullable=False)
     address = Column(String(200), nullable=False)
+    zip_code = Column(String(20), nullable=False)
+    city = Column(String(100), nullable=False)
+    state = Column(String(100), nullable=False)
+    country = Column(String(100), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     bedrooms = Column(Integer, nullable=False)
@@ -59,6 +65,8 @@ class Listing(Base):
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     anonymous_lister = Column(Boolean, default=False, nullable=False)
+    lister_first_name = Column(String(50), nullable=True)
+    lister_last_name = Column(String(50), nullable=True)
 
     owner = relationship("User", back_populates="listings")
     messages = relationship("Message", back_populates="listing", cascade="all, delete-orphan")
