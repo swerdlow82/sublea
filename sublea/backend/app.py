@@ -11,7 +11,20 @@ import random
 from dotenv import load_dotenv
 
 from auth.models import User, Listing, Message, Verification
-from schemas import UserCreate, UserResponse, UserLogin, Token, VerificationCodeValidate, ResendVerificationRequest, PasswordResetRequest, PasswordResetConfirm, ListingCreate, ListingResponse
+from schemas import (
+    UserCreate,
+    UserResponse,
+    UserLogin,
+    Token,
+    VerificationCodeValidate,
+    ResendVerificationRequest,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+    ListingCreate,
+    ListingResponse,
+    MessageCreate,
+    MessageResponse,
+)
 from auth_utils import *
 from email_service import email_service
 from google_maps_utils import get_coordinates
@@ -198,6 +211,61 @@ def password_reset_request(request_data: PasswordResetRequest, db: Session = Dep
     if not reset_email:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send password reset email.")
     return {"message": "Password reset email sent successfully.", "email": user.email}
+
+
+@app.post("/api/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
+    if message_data.sender_id == message_data.recipient_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sender and recipient must be different users."
+        )
+
+    content = message_data.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Message content cannot be empty."
+        )
+
+    sender = db.query(User).filter(User.id == message_data.sender_id).first()
+    if not sender:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sender not found."
+        )
+
+    recipient = db.query(User).filter(User.id == message_data.recipient_id).first()
+    if not recipient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipient not found."
+        )
+
+    listing = db.query(Listing).filter(Listing.id == message_data.listing_id).first()
+    if not listing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Listing not found."
+        )
+
+    if message_data.sender_id != listing.user_id and message_data.recipient_id != listing.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Listing must belong to either the sender or the recipient."
+        )
+
+    message = Message(
+        sender_id=message_data.sender_id,
+        recipient_id=message_data.recipient_id,
+        listing_id=message_data.listing_id,
+        content=content
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    return MessageResponse.from_orm(message)
 
 @app.post("/api/pages/password-reset-confirm")
 def password_reset_confirm(confirm_data: PasswordResetConfirm, db: Session = Depends(get_db)):
