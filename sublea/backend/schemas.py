@@ -174,3 +174,33 @@ class ListingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MessageCreate(BaseModel):
+    sender_id: int
+    recipient_id: int
+    listing_id: int
+    content: str = Field(..., min_length=1, max_length=2000)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "sender_id": 1,
+                "recipient_id": 2,
+                "listing_id": 3,
+                "content": "Hi! I'm interested in your listing—can we chat?"
+            }
+        }
+
+
+class MessageResponse(BaseModel):
+    id: int
+    sender_id: int
+    recipient_id: int
+    listing_id: int
+    content: str
+    sent_at: datetime
+    read: bool
+
+    class Config:
+        from_attributes = True
