@@ -40,7 +40,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         os.getenv("FRONTEND_URL", "http://localhost:5173"),
-        "http://localhost:8000"
+        "http://localhost:8000",
+        "http://localhost:3000",
+        ""
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -57,7 +59,7 @@ def generate_verification_code():
 
 
 
-@app.post("/api/pages/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
+@app.post("/api/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -87,7 +89,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         "user": UserResponse.from_orm(new_user)
     }
 
-@app.post("/api/pages/verify-email", response_model=UserResponse)
+@app.post("/api/verify", response_model=UserResponse)
 def verify_code(verification_data: VerificationCodeValidate, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == verification_data.email).first()
     if not user:
@@ -189,13 +191,14 @@ def resend_verification(
     }
 
 
-@app.post("/api/pages/login", response_model=Token)
+@app.post("/api/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_data.email).first()
     if not user or not verify_password(user_data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
     
     access_token = create_access_token(data={"user_id": user.id, "email": user.email})
+    print(f"User {user.email} logged in successfully. Access token generated.")
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -213,7 +216,7 @@ def password_reset_request(request_data: PasswordResetRequest, db: Session = Dep
     return {"message": "Password reset email sent successfully.", "email": user.email}
 
 
-@app.post("/api/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/api/inbox", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
     if message_data.sender_id == message_data.recipient_id:
         raise HTTPException(
@@ -301,7 +304,7 @@ def edit_profile_page():
 def listings_page():
     return {"message": "This is the listings page."}
 
-@app.post("/api/pages/listings")
+@app.post("/api/listings/create")
 def create_listing(user_data: ListingCreate, db: Session = Depends(get_db)):
     if not db.query(User).filter(User.id == user_data.user_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
