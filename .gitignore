@@ -174,3 +174,9 @@ dist/
 
 # macOS
 .DS_Store
+
+# User-specific documentation
+sublea/documents/
+sublea/documents/*
+
+
