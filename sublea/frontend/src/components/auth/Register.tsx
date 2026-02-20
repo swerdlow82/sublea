@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { apiFetch } from '../../api/client';
 
 interface RegisterFormData {
   email: string;
@@ -7,7 +8,7 @@ interface RegisterFormData {
   confirmPassword: string;
   agreedToTerms: boolean;
 }
-
+ 
 interface FormErrors {
   email?: string;
   password?: string;
@@ -149,11 +150,46 @@ export const Register = () => {
       // Payload: { email: formData.email, password: formData.password }
       // Response: { id: number, email: string, is_verified: boolean, ... }
       // Action: Redirect to login or auto-login
-      setTimeout(() => {
-        console.log('Register attempt:', formData);
+      // setTimeout(() => {
+      //   console.log('Register attempt:', formData);
+      //   setIsLoading(false);
+      //   // Handle success
+      // }, 1500);
+      try {
+        const data = await apiFetch("/api/register", {
+          method: "POST",
+          body: JSON.stringify({
+            email:formData.email,
+            password: formData.password,
+            // temp data
+            first_name: "New",
+            last_name: "User",
+            age: 21,
+            gender: "N/A"
+          })
+        });
+        console.log("Registration successful:", data);
+
+        // save token and email to test log in 
+        localStorage.setItem("authToken", data.access_token);
+        localStorage.setItem("user", JSON.stringify({
+          email: formData.email 
+        }));
+        
+        // verify page 
+        window.location.href = "/verify";
+
+      } catch (error ) {
+        const errorMessage = error instanceof Error ? error.message : "Registration failed";
+        setErrors({email: errorMessage });
+      } finally {
         setIsLoading(false);
-        // Handle success
-      }, 1500);
+      }
+
+
+
+
+
     } else {
       setIsLoading(false);
     }

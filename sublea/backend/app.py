@@ -42,6 +42,8 @@ app.add_middleware(
         os.getenv("FRONTEND_URL", "http://localhost:5173"),
         "http://localhost:8000",
         "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
         ""
     ],
     allow_credentials=True,
@@ -303,6 +305,18 @@ def edit_profile_page():
 @app.get("/pages/listings")
 def listings_page():
     return {"message": "This is the listings page."}
+
+# Edit - TEE
+@app.get("/api/listings",
+response_model=list[ListingResponse])
+
+def get_all_listings(db: Session = Depends(get_db)):
+    """
+    Returns all listings from the database.
+    Can be edited in the future to add pageination and filters
+    """
+    listings = db.query(Listing).all()
+    return listings
 
 @app.post("/api/listings/create")
 def create_listing(user_data: ListingCreate, db: Session = Depends(get_db)):
