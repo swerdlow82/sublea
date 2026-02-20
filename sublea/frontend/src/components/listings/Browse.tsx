@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ListingCard, Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from "../../api/client"
+
 
 interface FilterState {
   location: string;
@@ -44,53 +46,58 @@ const LOAD_MORE_DELAY = 500;
 // TODO: Replace this mock function with actual API call
 // Example: const response = await fetch('/api/listings?location=...&min_price=...&max_price=...');
 // Example: return await response.json();
-const fetchListings = async (filters: FilterState): Promise<Listing[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, LOADING_DELAY));
+
+
+
+
+
+// const fetchListings = async (filters: FilterState): Promise<Listing[]> => {
+//   // Simulate API delay
+//   await new Promise(resolve => setTimeout(resolve, LOADING_DELAY));
   
-  // MOCK DATA - Replace with actual API response
-  return [
-    {
-      id: '1',
-      title: 'Sunlit Loft near UO Campus',
-      rent: 1450,
-      address: '1450 Alder St, Eugene, OR',
-      bedrooms: 1,
-      bathrooms: 1,
-      available_from: '2024-06-01',
-      available_to: '2024-08-31',
-      images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=800&auto=format&fit=crop'],
-      anonymous_lister: false,
-      is_verified: true
-    },
-    {
-      id: '2',
-      title: 'Cozy Room - 5 min walk to Library',
-      rent: 900,
-      address: '890 Kincaid St, Eugene, OR',
-      bedrooms: 1,
-      bathrooms: 1,
-      available_from: '2024-05-15',
-      available_to: '2024-08-20',
-      images: ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop'],
-      anonymous_lister: false,
-      is_verified: true
-    },
-    {
-      id: '3',
-      title: 'Modern 2 Bed Apt - Downtown Eugene',
-      rent: 1800,
-      address: '500 E 13th Ave, Eugene, OR',
-      bedrooms: 2,
-      bathrooms: 2,
-      available_from: '2024-06-01',
-      available_to: '2024-12-31',
-      images: ['https://images.unsplash.com/photo-1484154218962-a1c002085d2f?q=80&w=800&auto=format&fit=crop'],
-      anonymous_lister: false,
-      is_verified: false
-    }
-  ];
-};
+//   // MOCK DATA - Replace with actual API response
+//   return [
+//     {
+//       id: '1',
+//       title: 'Sunlit Loft near UO Campus',
+//       rent: 1450,
+//       address: '1450 Alder St, Eugene, OR',
+//       bedrooms: 1,
+//       bathrooms: 1,
+//       available_from: '2024-06-01',
+//       available_to: '2024-08-31',
+//       images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=800&auto=format&fit=crop'],
+//       anonymous_lister: false,
+//       is_verified: true
+//     },
+//     {
+//       id: '2',
+//       title: 'Cozy Room - 5 min walk to Library',
+//       rent: 900,
+//       address: '890 Kincaid St, Eugene, OR',
+//       bedrooms: 1,
+//       bathrooms: 1,
+//       available_from: '2024-05-15',
+//       available_to: '2024-08-20',
+//       images: ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop'],
+//       anonymous_lister: false,
+//       is_verified: true
+//     },
+//     {
+//       id: '3',
+//       title: 'Modern 2 Bed Apt - Downtown Eugene',
+//       rent: 1800,
+//       address: '500 E 13th Ave, Eugene, OR',
+//       bedrooms: 2,
+//       bathrooms: 2,
+//       available_from: '2024-06-01',
+//       available_to: '2024-12-31',
+//       images: ['https://images.unsplash.com/photo-1484154218962-a1c002085d2f?q=80&w=800&auto=format&fit=crop'],
+//       anonymous_lister: false,
+//       is_verified: false
+//     }
+//   ];
+// };
 
 const BrowseHeader = ({ visibleCount, totalCount }: BrowseHeaderProps) => {
   return (
@@ -281,12 +288,18 @@ export const Browse = () => {
   useEffect(() => {
     const loadListings = async () => {
       setIsLoading(true);
-      
-      // TODO: Replace fetchListings with actual API call
-      const data = await fetchListings(filters);
-      
-      setListings(data);
-      setIsLoading(false);
+
+      try {
+        const data = await apiFetch("/api/listings");
+
+        console.log("Real listings from DB: ", data);
+        setListings(data);
+      } catch (error) {
+        console.error("Failed to load listings:", error);
+        setListings([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadListings();

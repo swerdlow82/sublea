@@ -1,11 +1,12 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ListingCard, Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from "../../api/client"
 
 // TYPE DEFINITIONS
 
 interface ListingFormData {
-  title: string;
+  title: string; 
   address: string;
   rent: string;
   availableFrom: string;
@@ -616,19 +617,44 @@ export const CreateListing = () => {
     }
     
     setIsSubmitting(true);
-    // Simulate API call
-    // TODO: Implement API call to POST /listings
-    // Payload needs conversion:
-    // - rent: string -> float
-    // - bedrooms/bathrooms: string -> int
-    // - images: string[] -> string (comma-separated, OR handled by backend schema)
-    // - user_id: retrieve from running auth context
-    // CRITICAL ISSUE: 'amenities' field is missing in Backend Listing Model!
-    setTimeout(() => {
-      console.log('Form Submitted:', formData);
+
+    try {
+      const payload = {
+        user_id: 1, // hardcoded temporarily
+        title: formData.title,
+        description: formData.description,
+        rent: parseFloat(formData.rent),
+        address: formData.address,
+        zip_code: "97401",
+        city: "Eugene",
+        state: "OR",
+        country: "USA",
+        bedrooms: parseInt(formData.bedrooms),
+        bathrooms: parseInt(formData.bathrooms),
+        roomate_count: parseInt(formData.roommates),
+        available_from: formData.availableFrom + "T00:00:00",
+        available_to: formData.availableTo ? formData.availableTo + "T00:00:00" : null,
+        images: formData.images.join(","),
+        anonymous_lister: formData.anonymous,
+        
+      };
+      console.log("Sending this payload to FastAPI:", payload);
+
+      const data = await apiFetch("/api/listings/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Successfully created listing in database:', data);
       setIsSubmitting(false);
-      navigate('/browse'); // Redirect to browse after success
-    }, 2000);
+      navigate('/browse');
+    } catch (error) {
+      console.error('Error creating listing:', error);
+      setIsSubmitting(false);
+      alert("Failed to create listing. Check console")
+      
+    }
+
   };
 
   // Create preview object compatible with ListingCard

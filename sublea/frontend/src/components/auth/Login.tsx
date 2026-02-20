@@ -1,13 +1,14 @@
 import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../../api/client';
 
 interface LoginFormData {
   email: string;
   password: string;
   rememberMe: boolean;
 }
-
+ 
 interface PasswordToggleButtonProps {
   showPassword: boolean;
   onClick: () => void;
@@ -86,30 +87,39 @@ export const Login = () => {
     // Response: { access_token: string, token_type: string }
     // Action: Store token in localStorage/cookie and redirect
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+      const data = await apiFetch("/api/login", {
+        method: "POST",
         body: JSON.stringify({
           email: formData.email,
           password: formData.password
         })
       });
 
-      console.log(`Login API response status: ${response.status}`);
-      console.log(`Login API response headers: ${JSON.stringify(response.headers)}`);
+
+      
+      // const response = await fetch(`${API_URL}/api/login`, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json'
+      //   },
+      //   body: JSON.stringify({
+      //     email: formData.email,
+      //     password: formData.password
+      //   })
+      // });
+
+      // console.log(`Login API response status: ${response.status}`);
+      // console.log(`Login API response headers: ${JSON.stringify(response.headers)}`);
 
 
 
       
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed. Please try again.');
-      }
+      // if (!response.ok) {
+      //   const errorData = await response.json();
+      //   throw new Error(errorData.detail || 'Login failed. Please try again.');
+      // }
       
-      const data = await response.json();
       console.log('Login API response data:', data);
 
       const storage = formData.rememberMe ? localStorage : sessionStorage;

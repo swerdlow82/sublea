@@ -10,7 +10,7 @@ export interface Listing {
   bathrooms: number;
   available_from: string;
   available_to: string;
-  images: string[];
+  images: string; // The backend returns a single string of comma-separated URLs
   anonymous_lister: boolean;
   is_verified?: boolean;
 }
@@ -209,7 +209,8 @@ export const ListingCard = ({ listing }: ListingCardProps) => {
     is_verified
   } = listing;
 
-  const thumbnail = images && images.length > 0 ? images[0] : null;
+  // Since the backend returns images as a comma-separated string, we need to split it
+  const thumbnail = images ? images.split(',')[0] : null;
 
   return (
     <Link 
