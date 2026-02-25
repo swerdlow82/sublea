@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../../api/client';
 
 // --- Types ---
 type ListingStatus = 'active' | 'expired' | 'draft';
@@ -22,6 +23,7 @@ interface StatusBadgeProps {
 }
 
 interface ListingRowProps {
+  key?: string;
   listing: MyListing;
   onDelete: (id: string) => void;
 }
@@ -306,7 +308,7 @@ const EmptyState = () => (
     <p className="text-[var(--text-muted)] max-w-sm mb-8">
       You haven't posted any sublets yet. Create your first listing to start reaching potential roommates.
     </p>
-    <Link to="/create-listing" className="btn btn-primary px-8 py-3">
+    <Link to="/listings/create" className="btn btn-primary px-8 py-3">
       Create My First Listing
     </Link>
   </div>
@@ -318,7 +320,7 @@ const PageHeader = () => (
       <h1 className="text-3xl font-bold text-[var(--text-main)]">My Listings</h1>
       <p className="text-[var(--text-muted)] mt-1">Manage your active sublets and drafts.</p>
     </div>
-    <Link to="/create-listing" className="btn btn-primary shadow-lg shadow-green-900/10">
+    <Link to="/listings/create" className="btn btn-primary shadow-lg shadow-green-900/10">
       <PlusIcon />
       Create New Listing
     </Link>
@@ -362,14 +364,34 @@ const useListings = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setListings(MOCK_USER_LISTINGS);
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
+    const fetchListings = async () => {
+      try {
+        const data = await apiFetch('/api/users/me/listings');
+        const mappedListings = data.map((listing: any) => ({
+          id: listing.id.toString(),
+          title: listing.title,
+          address: listing.address,
+          rent: listing.rent,
+          image: listing.images ? listing.images.split(',')[0] : 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=200&auto=format&fit=crop',
+          status: 'active', // Assuming active for now
+          views: 0,
+          inquiries: 0,
+          createdAt: listing.created_at,
+          expiresAt: listing.available_to || listing.created_at
+        }));
+        setListings(mappedListings);
+      } catch (error) {
+        console.error("Failed to fetch listings", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchListings();
   }, []);
 
-  const deleteListing = (id: string) => {
+  const deleteListing = async (id: string) => {
+    // Optional: await apiFetch(`/api/listings/${id}`, { method: 'DELETE' });
     setListings(prev => prev.filter(l => l.id !== id));
   };
 

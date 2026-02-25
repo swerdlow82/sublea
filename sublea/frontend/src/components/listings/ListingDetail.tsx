@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Listing } from '../../components/listings/ListingCard';
 
 // Extended interface for detailed view
-interface ListingDetailData extends Listing {
+interface ListingDetailData extends Omit<Listing, 'images'> {
+  images: string[];
   description: string;
   amenities: string[];
   coordinates: { lat: number; lng: number };
