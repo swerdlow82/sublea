@@ -12,7 +12,7 @@ export const apiFetch = async (
 
     const url = `${BACKEND_URL}${endpoint}`
 
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
 
     // standard headers
     const headers: HeadersInit = {

@@ -7,6 +7,10 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
   agreedToTerms: boolean;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  age: string;
 }
  
 interface FormErrors {
@@ -14,6 +18,10 @@ interface FormErrors {
   password?: string;
   confirmPassword?: string;
   terms?: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: string;
+  age?: string;
 }
 
 interface PasswordToggleButtonProps {
@@ -103,6 +111,16 @@ const validateForm = (formData: RegisterFormData): FormErrors => {
     errors.email = "Please use a valid .edu student email address";
   }
 
+  if (!formData.firstName) {
+    errors.firstName = "First name is required";
+  }
+  if (!formData.lastName) {
+    errors.lastName = "Last name is required";
+  }
+  if (!formData.gender) {
+    errors.gender = "Gender is required";
+  }
+
   if (!formData.password) {
     errors.password = "Password is required";
   } else if (formData.password.length < MIN_PASSWORD_LENGTH) {
@@ -125,7 +143,11 @@ export const Register = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    agreedToTerms: false
+    agreedToTerms: false,
+    firstName: '',
+    lastName: '',
+    gender: '',
+    age: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -161,11 +183,10 @@ export const Register = () => {
           body: JSON.stringify({
             email:formData.email,
             password: formData.password,
-            // temp data
-            first_name: "New",
-            last_name: "User",
-            age: 21,
-            gender: "N/A"
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            gender: formData.gender,
+            age: formData.age ? parseInt(formData.age, 10) : undefined
           })
         });
         console.log("Registration successful:", data);
@@ -217,6 +238,69 @@ export const Register = () => {
 
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
           
+          <div className="grid grid-cols-2 gap-4">
+            <div className="input-group">
+              <label htmlFor="firstName" className="label">First Name</label>
+              <input
+                id="firstName"
+                type="text"
+                className={`input ${errors.firstName ? 'border-red-500 focus:border-red-500' : ''}`}
+                placeholder="First Name"
+                value={formData.firstName}
+                onChange={(e) => updateFormField('firstName', e.target.value)}
+              />
+              {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="lastName" className="label">Last Name</label>
+              <input
+                id="lastName"
+                type="text"
+                className={`input ${errors.lastName ? 'border-red-500 focus:border-red-500' : ''}`}
+                placeholder="Last Name"
+                value={formData.lastName}
+                onChange={(e) => updateFormField('lastName', e.target.value)}
+              />
+              {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="input-group">
+              <label htmlFor="gender" className="label">Gender</label>
+              <select
+                id="gender"
+                className={`input ${errors.gender ? 'border-red-500 focus:border-red-500' : ''}`}
+                value={formData.gender}
+                onChange={(e) => updateFormField('gender', e.target.value)}
+              >
+                <option value="" disabled>Select your gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Non-binary">Non-binary</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+              {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="age" className="label">Age</label>
+              <input
+                id="age"
+                type="number"
+                min="16"
+                max="100"
+                className={`input ${errors.age ? 'border-red-500 focus:border-red-500' : ''}`}
+                placeholder="Age"
+                value={formData.age}
+                onChange={(e) => updateFormField('age', e.target.value)}
+              />
+              {errors.age && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
+            </div>
+          </div>
+
           <div className="input-group">
             <label htmlFor="email" className="label">Student Email (.edu)</label>
             <input
@@ -233,6 +317,8 @@ export const Register = () => {
               <EmailWarning email={formData.email} hasError={!!errors.email} />
             )}
           </div>
+
+
 
           <div className="input-group">
             <label htmlFor="password" className="label">Password</label>

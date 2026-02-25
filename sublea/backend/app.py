@@ -3,17 +3,20 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import Base, engine, get_db
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 import os
 import random
 from dotenv import load_dotenv
+from fastapi.security import OAuth2PasswordBearer
 
 from auth.models import User, Listing, Message, Verification
 from schemas import (
     UserCreate,
     UserResponse,
+    UserUpdate,
     UserLogin,
     Token,
     VerificationCodeValidate,
@@ -206,6 +209,34 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": UserResponse.from_orm(user)
     }
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+@app.get("/api/users/me", response_model=UserResponse)
+def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@app.put("/api/users/me", response_model=UserResponse)
+def update_user_profile(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    update_data = user_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(current_user, key, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @app.post("/api/pages/password-reset-request")
 def password_reset_request(request_data: PasswordResetRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request_data.email).first()
@@ -310,19 +341,86 @@ def listings_page():
 @app.get("/api/listings",
 response_model=list[ListingResponse])
 
-def get_all_listings(db: Session = Depends(get_db)):
+def get_all_listings(
+    location: Optional[str] = None,
+    minPrice: Optional[float] = None,
+    maxPrice: Optional[float] = None,
+    bedrooms: Optional[str] = None,
+    moveInDate: Optional[str] = None,
+    prefGender: Optional[str] = None,
+    habitCleaning: Optional[str] = None,
+    habitSmoking: Optional[str] = None,
+    habitPets: Optional[str] = None,
+    habitDrinking: Optional[str] = None,
+    habitNoise: Optional[str] = None,
+    sortOrder: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     Returns all listings from the database.
     Can be edited in the future to add pageination and filters
     """
-    listings = db.query(Listing).all()
+    query = db.query(Listing).join(User, Listing.user_id == User.id)
+
+    if location:
+        search = f"%{location}%"
+        query = query.filter(
+            (Listing.city.ilike(search)) |
+            (Listing.address.ilike(search)) |
+            (Listing.title.ilike(search)) |
+            (Listing.state.ilike(search))
+        )
+    
+    if minPrice is not None:
+        query = query.filter(Listing.rent >= minPrice)
+        
+    if maxPrice is not None:
+        query = query.filter(Listing.rent <= maxPrice)
+        
+    if bedrooms and bedrooms.lower() != 'any':
+        try:
+            query = query.filter(Listing.bedrooms >= int(bedrooms))
+        except ValueError:
+            pass
+            
+    if moveInDate:
+        try:
+            date_obj = datetime.strptime(moveInDate, "%Y-%m-%d")
+            query = query.filter(Listing.available_from <= date_obj)
+        except ValueError:
+            pass
+            
+    if prefGender and prefGender.lower() != 'any':
+        query = query.filter(User.gender_preference.ilike(f"%{prefGender}%") | User.gender.ilike(f"%{prefGender}%"))
+        
+    if habitCleaning and habitCleaning.lower() != 'any cleanliness' and habitCleaning.lower() != 'any':
+        query = query.filter(User.cleaning_habit.ilike(f"%{habitCleaning}%"))
+
+    if habitSmoking and habitSmoking.lower() != 'any smoking' and habitSmoking.lower() != 'any':
+        query = query.filter(User.smoking_habit.ilike(f"%{habitSmoking}%"))
+
+    if habitPets and habitPets.lower() != 'any pet pref' and habitPets.lower() != 'any':
+        query = query.filter(User.pet_preference.ilike(f"%{habitPets}%"))
+        
+    if habitDrinking and habitDrinking.lower() != 'any drinking' and habitDrinking.lower() != 'any':
+        query = query.filter(User.drinking_habit.ilike(f"%{habitDrinking}%"))
+
+    if habitNoise and habitNoise.lower() != 'any noise tol' and habitNoise.lower() != 'any':
+        query = query.filter(User.noise_tolerance.ilike(f"%{habitNoise}%"))
+
+    if sortOrder == 'price_low':
+        query = query.order_by(Listing.rent.asc())
+    elif sortOrder == 'price_high':
+        query = query.order_by(Listing.rent.desc())
+    else:
+        query = query.order_by(Listing.created_at.desc())
+
+    listings = query.all()
     return listings
 
 @app.post("/api/listings/create")
-def create_listing(user_data: ListingCreate, db: Session = Depends(get_db)):
-    if not db.query(User).filter(User.id == user_data.user_id).first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    user = db.query(User).filter(User.id == user_data.user_id).first()
+def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = current_user
     if user.is_verified == False:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User email not verified.")
     
@@ -338,7 +436,7 @@ def create_listing(user_data: ListingCreate, db: Session = Depends(get_db)):
     else:
         latitude, longitude = None, None
     new_listing = Listing(
-        user_id=user_data.user_id,
+        user_id=user.id,
         title=user_data.title,
         lister_first_name=user_data.lister_first_name,
         lister_last_name=user_data.lister_last_name,
