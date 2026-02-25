@@ -34,7 +34,7 @@ class UserResponse(BaseModel):
     is_verified: bool
     age: int
     gender: str
-    gender_preference: str
+    gender_preference: Optional[str] = None
     first_name: str
     last_name: str
     created_at: datetime
