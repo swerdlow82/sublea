@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 // Type Definitions
 
@@ -28,6 +31,7 @@ interface Thread {
 }
 
 interface ThreadListItemProps {
+  key?: React.Key;
   thread: Thread;
   isActive: boolean;
   onSelect: (threadId: string) => void;
@@ -39,6 +43,7 @@ interface ThreadHeaderProps {
 }
 
 interface MessageBubbleProps {
+  key?: React.Key;
   message: Message;
   isMe: boolean;
   showTimestamp: boolean;
@@ -101,13 +106,22 @@ const UserAvatar = ({
     );
   }
 
+  const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
+
   return (
     <div className="relative">
-      <img 
-        src={user.avatar} 
-        alt={user.name} 
-        className={`${sizeClasses[size]} rounded-full object-cover border border-[var(--border)]`}
-      />
+      {user.avatar ? (
+        <img 
+          src={user.avatar} 
+          alt={user.name} 
+          className={`${sizeClasses[size]} rounded-full object-cover border border-[var(--border)] bg-[var(--surface)]`}
+        />
+      ) : (
+        <div className={`${sizeClasses[size]} rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center`}>
+          <span className="text-sm font-bold text-[var(--text-main)] w-full text-center truncate">{initials}</span>
+        </div>
+      )}
+      
       {user.isOnline && (
         <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--background)] rounded-full" />
       )}
@@ -146,8 +160,14 @@ const ThreadListItem = ({ thread, isActive, onSelect }: ThreadListItemProps) => 
           </div>
           
           <p className={`text-sm truncate ${isUnread ? 'text-[var(--text-main)] font-semibold' : 'text-[var(--text-muted)]'}`}>
-            {lastMessage.sender === 'me' && 'You: '}
-            {lastMessage.text}
+            {lastMessage ? (
+              <>
+                {lastMessage.sender === 'me' && 'You: '}
+                {lastMessage.text}
+              </>
+            ) : (
+              <i>No messages yet...</i>
+            )}
           </p>
         </div>
 
@@ -279,83 +299,107 @@ const EmptyState = () => {
  * Hook to fetch and manage message threads
  * TODO: Replace with actual API call
  */
-const useThreads = () => {
+const useThreads = (user: any) => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchThreads = useCallback(async () => {
+    try {
+      if (!user) return;
+      setIsLoading(true);
+      const data = await apiFetch('/api/conversations');
+      const mappedThreads: Thread[] = data.map((conv: any) => ({
+        id: conv.other_user.id.toString(),
+        listing: {
+          id: conv.latest_message.listing_id.toString(),
+          title: `Listing #${conv.latest_message.listing_id}`,
+          image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=800&auto=format&fit=crop'
+        },
+        otherUser: {
+          name: `${conv.other_user.first_name} ${conv.other_user.last_name}`,
+          avatar: conv.other_user.profile_picture || undefined,
+          isAnonymous: false,
+          isOnline: true
+        },
+        messages: [{
+          id: conv.latest_message.id.toString(),
+          text: conv.latest_message.content,
+          sender: conv.latest_message.sender_id === user.id ? 'me' : 'other',
+          timestamp: new Date(conv.latest_message.sent_at)
+        }],
+        unreadCount: conv.unread_count,
+        lastUpdated: new Date(conv.latest_message.sent_at)
+      }));
+      setThreads(prev => {
+        // Preserve any temporary threads (threads with no messages that aren't from backend yet)
+        const tempThreads = prev.filter(t => t.messages.length === 0 && !mappedThreads.some(m => m.id === t.id));
+        return [...tempThreads, ...mappedThreads];
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch threads');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
-    const fetchThreads = async () => {
-      try {
-        setIsLoading(true);
-        // TODO: Replace with actual API call
-        // const response = await fetch('/api/messages/threads');
-        // const data = await response.json();
-        // setThreads(data);
-        
-        // For now, set empty array (no mock data)
-        setThreads([]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch threads');
-      } finally {
-        setIsLoading(false);
-      }
+    if (user) {
+      fetchThreads();
+    }
+  }, [user, fetchThreads]);
+
+  // Set up WebSocket
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!token) return;
+    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = process.env.NODE_ENV === 'development' ? 'localhost:8000' : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/messages?token=${token}`;
+    
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (event) => {
+      fetchThreads();
     };
+    
+    return () => ws.close();
+  }, [user, fetchThreads]);
 
-    fetchThreads();
-  }, []);
-
-  return { threads, setThreads, isLoading, error };
+  return { threads, setThreads, isLoading, error, fetchThreads };
 };
 
-/**
- * Hook to send a message
- * TODO: Replace with actual API call
- */
-const useSendMessage = () => {
+const useSendMessage = (user: any) => {
   const [isSending, setIsSending] = useState(false);
-
-  const sendMessage = async (threadId: string, text: string): Promise<Message> => {
+  const sendMessage = async (threadId: string, text: string, listingId: string = "1") => {
     setIsSending(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/messages/threads/${threadId}/messages`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ text })
-      // });
-      // const newMessage = await response.json();
-      // return newMessage;
-
-      // Temporary local message creation
+      const response = await apiFetch(`/api/inbox`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sender_id: user.id,
+          recipient_id: parseInt(threadId, 10),
+          listing_id: parseInt(listingId, 10),
+          content: text
+        })
+      });
       const newMessage: Message = {
-        id: `new-${Date.now()}`,
-        text,
+        id: response.id.toString(),
+        text: response.content,
         sender: 'me',
-        timestamp: new Date()
+        timestamp: new Date(response.sent_at)
       };
       return newMessage;
     } finally {
       setIsSending(false);
     }
   };
-
   return { sendMessage, isSending };
 };
 
-/**
- * Hook to mark thread as read
- * TODO: Replace with actual API call
- */
-const useMarkAsRead = () => {
-  const markAsRead = async (threadId: string): Promise<void> => {
-    // TODO: Replace with actual API call
-    // await fetch(`/api/messages/threads/${threadId}/read`, {
-    //   method: 'POST'
-    // });
-  };
-
-  return { markAsRead };
+const useMarkAsRead = (user: any) => {
+  return { markAsRead: async (threadId: string) => {} };
 };
 
 // ============================================================================
@@ -363,15 +407,63 @@ const useMarkAsRead = () => {
 // ============================================================================
 
 export const Inbox = () => {
+  const { user } = useAuth();
+  const location = useLocation();
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { threads, setThreads, isLoading, error } = useThreads();
-  const { sendMessage, isSending } = useSendMessage();
-  const { markAsRead } = useMarkAsRead();
+  const { threads, setThreads, isLoading, error, fetchThreads } = useThreads(user);
+  const { sendMessage, isSending } = useSendMessage(user);
+  const { markAsRead } = useMarkAsRead(user);
 
   const activeThread = threads.find(t => t.id === activeThreadId);
+
+  useEffect(() => {
+    if (location.state?.startNewConversation && location.state?.targetId && user) {
+       const targetId = location.state.targetId.toString();
+       setActiveThreadId(targetId);
+       
+       setThreads(prev => {
+          if (prev.find(p => p.id === targetId)) return prev;
+          return [{
+             id: targetId,
+             listing: { id: location.state.listingId.toString(), title: location.state.listingTitle, image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=800&auto=format&fit=crop' },
+             otherUser: { name: location.state.targetName, avatar: location.state.targetAvatar, isAnonymous: false, isOnline: true },
+             messages: [],
+             unreadCount: 0,
+             lastUpdated: new Date()
+          }, ...prev];
+       });
+       // Clear location state after setting
+       window.history.replaceState({}, document.title);
+    }
+  }, [location.state, user]);
+
+  useEffect(() => {
+    const fetchFullThread = async () => {
+       if (activeThreadId && user) {
+          try {
+            const data = await apiFetch(`/api/messages/${activeThreadId}`);
+            setThreads(prev => prev.map(t => {
+              if (t.id === activeThreadId) {
+                 return {
+                   ...t,
+                   messages: data.map((m: any) => ({
+                     id: m.id.toString(),
+                     text: m.content,
+                     sender: m.sender_id === user.id ? 'me' : 'other',
+                     timestamp: new Date(m.sent_at)
+                   }))
+                 };
+              }
+              return t;
+            }));
+          } catch (e) {}
+       }
+    };
+    fetchFullThread();
+  }, [activeThreadId, user, fetchThreads]);
 
   // Scroll to bottom when opening thread or receiving new messages
   useEffect(() => {
@@ -383,7 +475,9 @@ export const Inbox = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !activeThreadId) return;
 
-    const message = await sendMessage(activeThreadId, newMessage);
+    const currentThread = threads.find(t => t.id === activeThreadId);
+    const listingId = currentThread?.listing?.id || "1";
+    const message = await sendMessage(activeThreadId, newMessage, listingId);
 
     setThreads(prev => prev.map(t => {
       if (t.id === activeThreadId) {

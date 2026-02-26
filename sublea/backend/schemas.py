@@ -214,3 +214,11 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ConversationResponse(BaseModel):
+    other_user: UserResponse
+    latest_message: MessageResponse
+    unread_count: int
+
+    class Config:
+        from_attributes = True

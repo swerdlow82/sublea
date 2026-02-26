@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from '../../api/client';
 
 // Extended interface for detailed view
 interface ListingDetailData extends Omit<Listing, 'images'> {
@@ -182,13 +183,14 @@ interface RentActionCardProps {
   rent: number;
   availableFrom: string;
   availableTo: string;
+  onMessageLister: () => void;
 }
 
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const RentActionCard = ({ rent, availableFrom, availableTo }: RentActionCardProps) => {
+const RentActionCard = ({ rent, availableFrom, availableTo, onMessageLister }: RentActionCardProps) => {
   return (
     <div className="card border-t-4 border-t-[var(--primary)] animate-slide-up">
       <div className="mb-6">
@@ -201,7 +203,7 @@ const RentActionCard = ({ rent, availableFrom, availableTo }: RentActionCardProp
         </div>
       </div>
 
-      <button className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
+      <button onClick={onMessageLister} className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
         Message Lister
       </button>
       <button className="btn btn-outline w-full py-2.5">
@@ -219,7 +221,7 @@ interface OwnerProfileCardProps {
   owner: {
     id: string;
     name: string;
-    avatar: string;
+    avatar?: string;
     bio: string;
     tags: string[];
   };
@@ -230,11 +232,19 @@ const OwnerProfileCard = ({ owner }: OwnerProfileCardProps) => {
     <div className="card animate-slide-up delay-100">
       <h3 className="font-bold text-[var(--text-main)] mb-4">Meet the Lister</h3>
       <div className="flex items-center gap-4 mb-4">
-        <img 
-          src={owner.avatar} 
-          alt={owner.name} 
-          className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]"
-        />
+        {owner.avatar ? (
+          <img 
+            src={owner.avatar} 
+            alt={owner.name} 
+            className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full border-2 border-[var(--surface)] ring-2 ring-[var(--border)] flex items-center justify-center bg-[var(--surface)]">
+             <span className="text-xl font-bold text-[var(--text-main)]">
+               {owner.name ? owner.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+             </span>
+          </div>
+        )}
         <div>
           <p className="font-bold text-lg">{owner.name}</p>
           <p className="text-xs text-[var(--text-muted)]">Verified Student</p>
@@ -300,51 +310,43 @@ const useFetchListing = (id: string | undefined) => {
   useEffect(() => {
     const fetchListing = async () => {
       setLoading(true);
-      // Simulate API delay
-      // TODO: Implement API call to GET /listings/{id}
-      // Response needs rich mapping: 
-      // - amenities: MISSING in backend
-      // - coordinates: { lat: listing.latitude, lng: listing.longitude }
-      // - owner: map User fields (profile_picture -> avatar, etc.)
-      const timer = setTimeout(() => {
-        // Mock Response based on ID (In a real app, this would be a fetch call)
+      if (!id) return;
+      try {
+        const backendListing = await apiFetch(`/api/listings/${id}`);
+
         const mockListing: ListingDetailData = {
-          id: id || '1',
-          title: 'Sunlit Loft near UO Campus',
-          rent: 1450,
-          address: '1450 Alder St, Eugene, OR 97401',
-          bedrooms: 1,
-          bathrooms: 1,
-          roommates_count: 2,
-          available_from: '2024-06-01',
-          available_to: '2024-08-31',
-          images: [
+          id: backendListing.id.toString(),
+          title: backendListing.title,
+          rent: backendListing.rent,
+          address: backendListing.address,
+          bedrooms: backendListing.bedrooms,
+          bathrooms: backendListing.bathrooms,
+          roommates_count: backendListing.roommate_count,
+          available_from: backendListing.available_from,
+          available_to: backendListing.available_to,
+          images: backendListing.images ? backendListing.images.split(',') : [
             'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1484154218962-a1c002085d2f?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=2560&auto=format&fit=crop'
           ],
-          anonymous_lister: false,
-          is_verified: true,
-          description: `Looking for a subletter for the summer semester! This is a spacious, fully furnished loft apartment located right next to the UO Campus. 
-
-The apartment features high ceilings, exposed brick walls, and huge windows that let in tons of natural light. You'll have your own private bedroom and bathroom, sharing the kitchen and living area with two quiet, respectful grad students from UO.
-
-Rent includes all utilities and high-speed internet. Laundry is in the unit. Steps away from the Knight Library, grocery stores, and tons of cafes on 13th Ave.`,
-          amenities: ['In-unit Washer/Dryer', 'High-speed WiFi', 'Central AC', 'Dishwasher', 'Elevator', 'Gym in Building', 'Rooftop Access'],
-          coordinates: { lat: 44.0448, lng: -123.0726 }, 
+          anonymous_lister: backendListing.anonymous_lister,
+          is_verified: true, // Mocked for now
+          description: backendListing.description || 'No description provided.',
+          amenities: ['In-unit Washer/Dryer', 'High-speed WiFi'],
+          coordinates: { lat: backendListing.latitude || 44.0448, lng: backendListing.longitude || -123.0726 }, 
           owner: {
-             id: 'mock-owner-id',
-             name: 'Mock Owner',
-             avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200&auto=format&fit=crop',
-             bio: 'Temporary mock bio - replace with real data from API',
-             tags: ['Mock Tag 1', 'Mock Tag 2', 'Mock Tag 3']
+             id: backendListing.user_id.toString(),
+             name: backendListing.lister_first_name ? `${backendListing.lister_first_name} ${backendListing.lister_last_name}` : 'Unknown Lister',
+             avatar: backendListing.lister_profile_picture || undefined,
+             bio: 'Sublea User',
+             tags: ['Verified']
           }
         };
 
         setListing(mockListing);
+      } catch (error) {
+        console.error("Failed to fetch listing:", error);
+      } finally {
         setLoading(false);
-      }, 800);
+      }
     };
 
     fetchListing();
@@ -404,6 +406,7 @@ export const ListingDetail = () => {
               rent={listing.rent}
               availableFrom={listing.available_from}
               availableTo={listing.available_to}
+              onMessageLister={() => navigate('/inbox', { state: { listingId: listing.id, targetId: listing.owner?.id, targetName: listing.owner?.name, targetAvatar: listing.owner?.avatar, listingTitle: listing.title, startNewConversation: true }})}
             />
 
             {/* Owner Profile Card */}

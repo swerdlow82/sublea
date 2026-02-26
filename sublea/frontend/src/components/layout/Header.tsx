@@ -169,6 +169,7 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   { label: 'Listings', href: '/browse', target: '/browse' },
   { label: 'How it Works', href: '/#how-it-works', target: '#how-it-works' },
   { label: 'FAQ', href: '/#faq', target: '#faq' },
+  { label: 'Messages', href: '/inbox', target: '/inbox' },
 ];
 
 export const Header = () => {
