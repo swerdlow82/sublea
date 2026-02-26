@@ -134,6 +134,17 @@ class ListingCreate(BaseModel):
     available_to: Optional[datetime]
     images: Optional[str]  # Comma-separated image URLs
     anonymous_lister: Optional[bool] = False
+    gender_preference: Optional[str] = None
+    cleaning_habit: Optional[str] = None
+    smoking_habit: Optional[str] = None
+    pet_preference: Optional[str] = None
+    drinking_habit: Optional[str] = None
+    noise_tolerance: Optional[str] = None
+    bed_time: Optional[str] = None
+    wake_time: Optional[str] = None
+    age_preference_min: Optional[int] = None
+    age_preference_max: Optional[int] = None
+    amenities: Optional[str] = None # Comma-separated amenities
 
     class Config:
         json_schema_extra = {
@@ -179,6 +190,19 @@ class ListingResponse(BaseModel):
     available_to: Optional[datetime]
     images: Optional[str]  # Comma-separated image URLs
     anonymous_lister: Optional[bool] = False
+    
+    gender_preference: Optional[str] = None
+    cleaning_habit: Optional[str] = None
+    smoking_habit: Optional[str] = None
+    pet_preference: Optional[str] = None
+    drinking_habit: Optional[str] = None
+    noise_tolerance: Optional[str] = None
+    bed_time: Optional[str] = None
+    wake_time: Optional[str] = None
+    age_preference_min: Optional[int] = None
+    age_preference_max: Optional[int] = None
+    amenities: Optional[str] = None
+    
     created_at: datetime
     deleted_at: Optional[datetime]
 
@@ -219,6 +243,10 @@ class ConversationResponse(BaseModel):
     other_user: UserResponse
     latest_message: MessageResponse
     unread_count: int
+    listing_id: int
+    listing_deleted: bool = False
+    listing_title: str = ""
+    other_user_is_lister: bool = False  # True when the other_user owns the listing
 
     class Config:
         from_attributes = True

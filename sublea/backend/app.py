@@ -1,7 +1,7 @@
 ## temp import models during dev (auth)
 # later to be replaced with migrations
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, desc, and_
+from sqlalchemy import func, or_, desc, and_, text
 from database import Base, engine, get_db
 from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from typing import Optional
@@ -39,23 +39,61 @@ load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
+# Migration to add new columns to existing listings table in SQLite
+with engine.connect() as conn:
+    migrate_statements = [
+        "ALTER TABLE listings ADD COLUMN gender_preference VARCHAR(50)",
+        "ALTER TABLE listings ADD COLUMN cleaning_habit VARCHAR(50)",
+        "ALTER TABLE listings ADD COLUMN smoking_habit VARCHAR(50)",
+        "ALTER TABLE listings ADD COLUMN pet_preference VARCHAR(20)",
+        "ALTER TABLE listings ADD COLUMN drinking_habit VARCHAR(20)",
+        "ALTER TABLE listings ADD COLUMN noise_tolerance VARCHAR(20)",
+        "ALTER TABLE listings ADD COLUMN bed_time VARCHAR(50)",
+        "ALTER TABLE listings ADD COLUMN wake_time VARCHAR(20)",
+        "ALTER TABLE listings ADD COLUMN age_preference_min INTEGER",
+        "ALTER TABLE listings ADD COLUMN age_preference_max INTEGER",
+        "ALTER TABLE listings ADD COLUMN amenities TEXT",
+    ]
+    for statement in migrate_statements:
+        try:
+            conn.execute(text(statement))
+            conn.commit()
+        except Exception:
+            # Column likely already exists
+            pass
+
 app = FastAPI(title="Sublea Backend API", version="1.0.0", description="Student exclusive subletting marketplace API")
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: dict[int, WebSocket] = {}
+        # Maps user_id -> list of active WebSocket connections (supports multi-tab/device)
+        self.active_connections: dict[int, list[WebSocket]] = {}
 
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections[user_id] = websocket
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
 
-    def disconnect(self, user_id: int):
+    def disconnect(self, user_id: int, websocket: WebSocket):
         if user_id in self.active_connections:
-            del self.active_connections[user_id]
+            try:
+                self.active_connections[user_id].remove(websocket)
+            except ValueError:
+                pass
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
 
     async def send_personal_message(self, message: str, user_id: int):
-        if user_id in self.active_connections:
-            await self.active_connections[user_id].send_text(message)
+        # Fan out to all of the user's active tabs/devices
+        dead_sockets = []
+        for ws in self.active_connections.get(user_id, []):
+            try:
+                await ws.send_text(message)
+            except Exception:
+                dead_sockets.append(ws)
+        for ws in dead_sockets:
+            self.disconnect(user_id, ws)
 
 manager = ConnectionManager()
 
@@ -248,6 +286,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
+@app.get("/api/users/me/listings", response_model=list[ListingResponse])
+def get_my_listings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    listings = db.query(Listing).filter(
+        Listing.user_id == current_user.id,
+        Listing.deleted_at == None
+    ).order_by(Listing.created_at.desc()).all()
+    return listings
+
 @app.put("/api/users/me", response_model=UserResponse)
 def update_user_profile(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     update_data = user_update.dict(exclude_unset=True)
@@ -270,7 +316,7 @@ def password_reset_request(request_data: PasswordResetRequest, db: Session = Dep
 
 
 @app.post("/api/inbox", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
+async def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
     if message_data.sender_id == message_data.recipient_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -322,16 +368,10 @@ def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
     db.refresh(message)
 
     msg_resp = MessageResponse.from_orm(message)
-    
-    # Instead of inline serialization use json.dumps with dict mapping since there could be datetime objects
-    import asyncio
     msg_dict = msg_resp.dict()
     msg_dict['sent_at'] = msg_dict['sent_at'].isoformat()
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(manager.send_personal_message(json.dumps(msg_dict), message_data.recipient_id))
-    except Exception:
-        pass
+    # Directly await on the running event loop — the only correct way from an async handler
+    await manager.send_personal_message(json.dumps(msg_dict), message_data.recipient_id)
 
     return msg_resp
 
@@ -340,60 +380,95 @@ def get_conversations(current_user: User = Depends(get_current_user), db: Sessio
     messages = db.query(Message).filter(
         or_(Message.sender_id == current_user.id, Message.recipient_id == current_user.id)
     ).order_by(desc(Message.sent_at)).all()
-    
-    conversations = {}
+
+    # Key: (other_user_id, listing_id) — one thread per user+listing pair
+    conversations: dict[tuple[int, int], ConversationResponse] = {}
     for msg in messages:
         other_id = msg.recipient_id if msg.sender_id == current_user.id else msg.sender_id
-        if other_id not in conversations:
+        key = (other_id, msg.listing_id)
+        if key not in conversations:
             other_user = db.query(User).filter(User.id == other_id).first()
             if other_user:
-                unread = db.query(Message).filter(Message.sender_id == other_id, Message.recipient_id == current_user.id, Message.read == False).count()
-                conversations[other_id] = {
-                    "other_user": UserResponse.from_orm(other_user),
-                    "latest_message": MessageResponse.from_orm(msg),
-                    "unread_count": unread
-                }
+                unread = db.query(Message).filter(
+                    Message.sender_id == other_id,
+                    Message.recipient_id == current_user.id,
+                    Message.listing_id == msg.listing_id,
+                    Message.read == False
+                ).count()
+                listing = db.query(Listing).filter(Listing.id == msg.listing_id).first()
+                conversations[key] = ConversationResponse(
+                    other_user=UserResponse.from_orm(other_user),
+                    latest_message=MessageResponse.from_orm(msg),
+                    unread_count=unread,
+                    listing_id=msg.listing_id,
+                    listing_deleted=listing.deleted_at is not None if listing else True,
+                    listing_title=listing.title if listing else "(deleted listing)",
+                    other_user_is_lister=listing.user_id == other_id if listing else False
+                )
     return list(conversations.values())
 
-@app.get("/api/messages/{partner_id}", response_model=list[MessageResponse])
-def get_messages(partner_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@app.put("/api/messages/{partner_id}/{listing_id}/read")
+def mark_messages_read(partner_id: int, listing_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    unreads = db.query(Message).filter(
+        Message.listing_id == listing_id,
+        Message.sender_id == partner_id,
+        Message.recipient_id == current_user.id,
+        Message.read == False
+    ).all()
+    
+    if unreads:
+        for m in unreads:
+            m.read = True
+        db.commit()
+    
+    return {"message": f"Marked {len(unreads)} messages as read"}
+
+@app.get("/api/messages/{partner_id}/{listing_id}", response_model=list[MessageResponse])
+def get_messages(partner_id: int, listing_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     messages = db.query(Message).filter(
+        Message.listing_id == listing_id,
         or_(
             and_(Message.sender_id == current_user.id, Message.recipient_id == partner_id),
             and_(Message.sender_id == partner_id, Message.recipient_id == current_user.id)
         )
     ).order_by(Message.sent_at.asc()).all()
-    
+
     unreads = [m for m in messages if m.sender_id == partner_id and not m.read]
     for m in unreads:
         m.read = True
     if unreads:
         db.commit()
-        
+
     return messages
 
 @app.websocket("/ws/messages")
 async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+    user_id = None
     try:
         payload = decode_access_token(token)
-        user_id = payload.get("user_id")
+        user_id = payload.get("user_id") if payload else None
         if not user_id:
-            await websocket.close()
+            await websocket.close(code=4001)
             return
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            await websocket.close()
+            await websocket.close(code=4001)
             return
-        
+
         await manager.connect(user_id, websocket)
         try:
             while True:
-                data = await websocket.receive_text()
-                # Placeholder for parsing received data if needed
+                # Receive client frames; also handles pong responses from clients
+                await websocket.receive_text()
         except WebSocketDisconnect:
-            manager.disconnect(user_id)
-    except Exception as e:
-        await websocket.close()
+            manager.disconnect(user_id, websocket)
+    except Exception:
+        if user_id:
+            manager.disconnect(user_id, websocket)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/pages/password-reset-confirm")
@@ -447,8 +522,8 @@ def get_all_listings(
     sortOrder: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    # (Implementation remains same, just replacing to allow insertion)
-    query = db.query(Listing).join(User, Listing.user_id == User.id)
+    # Exclude soft-deleted listings from public browse
+    query = db.query(Listing).join(User, Listing.user_id == User.id).filter(Listing.deleted_at == None)
 
     if location:
         search = f"%{location}%"
@@ -479,22 +554,22 @@ def get_all_listings(
             pass
             
     if prefGender and prefGender.lower() != 'any':
-        query = query.filter(User.gender_preference.ilike(f"%{prefGender}%") | User.gender.ilike(f"%{prefGender}%"))
+        query = query.filter(Listing.gender_preference.ilike(f"%{prefGender}%") | User.gender.ilike(f"%{prefGender}%"))
         
     if habitCleaning and habitCleaning.lower() != 'any cleanliness' and habitCleaning.lower() != 'any':
-        query = query.filter(User.cleaning_habit.ilike(f"%{habitCleaning}%"))
+        query = query.filter(Listing.cleaning_habit.ilike(f"%{habitCleaning}%"))
 
     if habitSmoking and habitSmoking.lower() != 'any smoking' and habitSmoking.lower() != 'any':
-        query = query.filter(User.smoking_habit.ilike(f"%{habitSmoking}%"))
+        query = query.filter(Listing.smoking_habit.ilike(f"%{habitSmoking}%"))
 
     if habitPets and habitPets.lower() != 'any pet pref' and habitPets.lower() != 'any':
-        query = query.filter(User.pet_preference.ilike(f"%{habitPets}%"))
+        query = query.filter(Listing.pet_preference.ilike(f"%{habitPets}%"))
         
     if habitDrinking and habitDrinking.lower() != 'any drinking' and habitDrinking.lower() != 'any':
-        query = query.filter(User.drinking_habit.ilike(f"%{habitDrinking}%"))
+        query = query.filter(Listing.drinking_habit.ilike(f"%{habitDrinking}%"))
 
     if habitNoise and habitNoise.lower() != 'any noise tol' and habitNoise.lower() != 'any':
-        query = query.filter(User.noise_tolerance.ilike(f"%{habitNoise}%"))
+        query = query.filter(Listing.noise_tolerance.ilike(f"%{habitNoise}%"))
 
     if sortOrder == 'price_low':
         query = query.order_by(Listing.rent.asc())
@@ -513,6 +588,34 @@ def get_single_listing(listing_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Listing not found")
     return listing
 
+
+@app.delete("/api/listings/{listing_id}", status_code=204)
+async def delete_listing(
+    listing_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    listing = db.query(Listing).filter(
+        Listing.id == listing_id,
+        Listing.user_id == current_user.id
+    ).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found or not authorized")
+    listing.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    # Notify all message participants so their inboxes update live
+    participants = db.query(Message.sender_id, Message.recipient_id).filter(
+        Message.listing_id == listing_id
+    ).distinct().all()
+    notified = set()
+    for row in participants:
+        for uid in (row.sender_id, row.recipient_id):
+            if uid not in notified:
+                notified.add(uid)
+                await manager.send_personal_message(
+                    json.dumps({"type": "listing_deleted", "listing_id": listing_id}),
+                    uid
+                )
 
 @app.post("/api/listings/create")
 def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -550,8 +653,19 @@ def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), curr
         roommate_count=user_data.roommate_count,
         available_from=user_data.available_from,
         available_to=user_data.available_to,
-        images = ",".join(user_data.images) if isinstance(user_data.images, list) else user_data.images,
-        anonymous_lister=user_data.anonymous_lister
+        images=",".join(user_data.images) if isinstance(user_data.images, list) else user_data.images,
+        anonymous_lister=user_data.anonymous_lister,
+        gender_preference=user_data.gender_preference,
+        cleaning_habit=user_data.cleaning_habit,
+        smoking_habit=user_data.smoking_habit,
+        pet_preference=user_data.pet_preference,
+        drinking_habit=user_data.drinking_habit,
+        noise_tolerance=user_data.noise_tolerance,
+        bed_time=user_data.bed_time,
+        wake_time=user_data.wake_time,
+        age_preference_min=user_data.age_preference_min,
+        age_preference_max=user_data.age_preference_max,
+        amenities=",".join(user_data.amenities) if isinstance(user_data.amenities, list) else user_data.amenities
     )
     db.add(new_listing)
     db.commit()

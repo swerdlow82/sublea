@@ -1,7 +1,8 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ListingCard, Listing } from '../../components/listings/ListingCard';
-import { apiFetch } from "../../api/client"
+import { apiFetch, ApiError } from "../../api/client"
+import { toast } from 'react-hot-toast';
 
 // TYPE DEFINITIONS
 
@@ -39,20 +40,185 @@ interface ProgressStepProps {
   isLast?: boolean;
 }
 
+// ADDRESS AUTOCOMPLETE
+
+interface AddressSuggestion {
+  place_id: number;
+  display_name: string;
+}
+
+interface AddressAutocompleteProps {
+  value: string;
+  onSelect: (address: string) => void;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  hasError: boolean;
+}
+
+const AddressAutocomplete = ({ value, onSelect, onChange, hasError }: AddressAutocompleteProps) => {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        format: 'json',
+        addressdetails: '1',
+        limit: '6',
+        countrycodes: 'us',
+      });
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      const data: AddressSuggestion[] = await res.json();
+      setSuggestions(data);
+      setIsOpen(data.length > 0);
+      setActiveIndex(-1);
+    } catch {
+      setSuggestions([]);
+      setIsOpen(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    onChange(e);
+    const q = e.target.value;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(q), 350);
+  };
+
+  const handleSelect = (suggestion: AddressSuggestion) => {
+    onSelect(suggestion.display_name);
+    setSuggestions([]);
+    setIsOpen(false);
+    setActiveIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      handleSelect(suggestions[activeIndex]);
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          name="address"
+          value={value}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          className={`input ${hasError ? 'border-red-500' : ''}`}
+          placeholder="Start typing an address…"
+          autoComplete="off"
+        />
+        {isLoading && (
+          <div style={{
+            position: 'absolute', right: '12px', top: '50%',
+            transform: 'translateY(-50%)', pointerEvents: 'none'
+          }}>
+            <svg className="animate-spin h-4 w-4 text-[var(--primary)]" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {isOpen && suggestions.length > 0 && (
+        <ul style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '10px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+          listStyle: 'none',
+          margin: 0,
+          padding: '4px 0',
+          overflow: 'hidden',
+        }}>
+          {suggestions.map((s, idx) => (
+            <li
+              key={s.place_id}
+              onMouseDown={() => handleSelect(s)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                color: 'var(--text-main)',
+                background: idx === activeIndex ? 'var(--primary-light, rgba(99,102,241,0.1))' : 'transparent',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={() => setActiveIndex(idx)}
+            >
+              <svg style={{ flexShrink: 0, width: '14px', height: '14px', color: 'var(--primary)', opacity: 0.8 }}
+                fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.display_name}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 interface StepBasicsProps {
   formData: ListingFormData;
   errors: ValidationErrors;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  onAddressSelect: (address: string) => void;
 }
 
 interface StepDetailsProps {
   formData: ListingFormData;
   errors: ValidationErrors;
-  imageUrlInput: string;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
-  onImageUrlChange: (value: string) => void;
   onAmenityToggle: (amenity: string) => void;
-  onAddImage: () => void;
+  onUploadImages: (files: FileList) => void;
   onRemoveImage: (index: number) => void;
   onAddDemoImage: () => void;
 }
@@ -137,7 +303,7 @@ const ProgressStep = ({ stepNumber, label, currentStep, isLast = false }: Progre
   );
 };
 
-const StepBasics = ({ formData, errors, onChange }: StepBasicsProps) => {
+const StepBasics = ({ formData, errors, onChange, onAddressSelect }: StepBasicsProps) => {
   return (
     <div className="space-y-6 animate-slide-up">
       <h2 className="text-xl font-bold mb-4">Essential Information</h2>
@@ -157,12 +323,11 @@ const StepBasics = ({ formData, errors, onChange }: StepBasicsProps) => {
 
       <div className="input-group">
         <label className="label">Address</label>
-        <input
-          name="address"
+        <AddressAutocomplete
           value={formData.address}
           onChange={onChange}
-          className={`input ${errors.address ? 'border-red-500' : ''}`}
-          placeholder="Street Address, City, State"
+          onSelect={onAddressSelect}
+          hasError={!!errors.address}
         />
         {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address}</p>}
       </div>
@@ -214,11 +379,9 @@ const StepBasics = ({ formData, errors, onChange }: StepBasicsProps) => {
 const StepDetails = ({ 
   formData, 
   errors, 
-  imageUrlInput,
   onChange, 
-  onImageUrlChange,
   onAmenityToggle, 
-  onAddImage, 
+  onUploadImages, 
   onRemoveImage, 
   onAddDemoImage 
 }: StepDetailsProps) => {
@@ -310,6 +473,7 @@ const StepDetails = ({
             <div key={idx} className="relative w-32 h-24 rounded-lg overflow-hidden border border-[var(--border)] group">
               <img src={img} alt="Preview" className="w-full h-full object-cover" />
               <button
+                type="button"
                 onClick={() => onRemoveImage(idx)}
                 className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
               >
@@ -319,31 +483,45 @@ const StepDetails = ({
               </button>
             </div>
           ))}
-          
+
+          {/* Upload drop-zone shown when no images yet */}
           {formData.images.length === 0 && (
-             <div className="w-full h-32 border-2 border-dashed border-[var(--border)] rounded-lg flex flex-col items-center justify-center text-[var(--text-muted)] bg-[var(--surface)]">
-               <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-               </svg>
-               <span>No photos added yet</span>
-             </div>
+            <label
+              htmlFor="photo-upload"
+              className="w-full h-32 border-2 border-dashed border-[var(--border)] rounded-lg flex flex-col items-center justify-center text-[var(--text-muted)] bg-[var(--surface)] cursor-pointer hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            >
+              <svg className="w-8 h-8 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm font-medium">Click to upload photos</span>
+              <span className="text-xs mt-1 opacity-70">JPG, PNG, WEBP — multiple allowed</span>
+            </label>
           )}
         </div>
 
-        <div className="flex gap-2 mb-2">
-          <input 
-            type="text" 
-            className="input flex-1"
-            placeholder="Paste image URL here..." 
-            value={imageUrlInput}
-            onChange={(e) => onImageUrlChange(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onAddImage()}
+        <div className="flex items-center gap-3">
+          {/* Hidden file input */}
+          <input
+            id="photo-upload"
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => e.target.files && onUploadImages(e.target.files)}
           />
-          <button type="button" onClick={onAddImage} className="btn btn-secondary whitespace-nowrap">Add URL</button>
+          <label
+            htmlFor="photo-upload"
+            className="btn btn-secondary cursor-pointer whitespace-nowrap"
+          >
+            <svg className="w-4 h-4 inline-block mr-1.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload Photos
+          </label>
+          <button type="button" onClick={onAddDemoImage} className="text-xs text-[var(--primary)] hover:underline">
+            + Add random demo image
+          </button>
         </div>
-        <button type="button" onClick={onAddDemoImage} className="text-xs text-[var(--primary)] hover:underline">
-          + Add random demo image
-        </button>
         {errors.images && <p className="text-red-500 text-xs mt-1">{errors.images}</p>}
       </div>
 
@@ -373,7 +551,7 @@ const StepPreferences = ({ formData, onChange }: StepPreferencesProps) => {
     <div className="space-y-8 animate-slide-up">
       <div className="border-b border-[var(--border)] pb-4">
         <h3 className="font-bold text-lg">Roommate Compatibility</h3>
-        <p className="text-sm text-[var(--text-muted)]">Set expectations or rules for your new roommate.</p>
+        <p className="text-sm text-[var(--text-muted)]">Describe your current roommates (if applicable) so potential sublessees can see if they'd be a good fit.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -649,10 +827,6 @@ const validateStep = (step: number, formData: ListingFormData): ValidationErrors
   return errors;
 };
 
-const isValidUrl = (url: string): boolean => {
-  return /^https?:\/\/.+/.test(url);
-};
-
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -663,7 +837,6 @@ export const CreateListing = () => {
   const [formData, setFormData] = useState<ListingFormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [imageUrlInput, setImageUrlInput] = useState('');
 
   // Scroll to top on step change
   useEffect(() => {
@@ -726,22 +899,24 @@ export const CreateListing = () => {
     });
   };
 
-  const handleAddImage = () => {
-    if (!imageUrlInput) return;
-    
-    if (!isValidUrl(imageUrlInput)) {
-      setErrors(prev => ({ ...prev, images: 'Please enter a valid URL starting with http:// or https://' }));
-      return;
-    }
-    
-    setFormData(prev => ({ ...prev, images: [...prev.images, imageUrlInput] }));
-    setImageUrlInput('');
-    
-    if (errors.images) {
-      const newErrors = { ...errors };
-      delete newErrors.images;
-      setErrors(newErrors);
-    }
+  const handleUploadImages = (files: FileList) => {
+    const readers = Array.from(files).map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        })
+    );
+
+    Promise.all(readers).then((dataUrls) => {
+      setFormData((prev) => ({ ...prev, images: [...prev.images, ...dataUrls] }));
+      if (errors.images) {
+        const newErrors = { ...errors };
+        delete newErrors.images;
+        setErrors(newErrors);
+      }
+    });
   };
 
   const handleRemoveImage = (index: number) => {
@@ -818,7 +993,8 @@ export const CreateListing = () => {
         drinking_habit: formData.habitDrinking,
         noise_tolerance: formData.habitNoise,
         bed_time: formData.bedTime,
-        wake_time: formData.wakeTime
+        wake_time: formData.wakeTime,
+        amenities: formData.amenities.join(",")
       };
       console.log("Sending this payload to FastAPI:", payload);
 
@@ -833,8 +1009,12 @@ export const CreateListing = () => {
     } catch (error) {
       console.error('Error creating listing:', error);
       setIsSubmitting(false);
-      alert("Failed to create listing. Check console")
       
+      if (error instanceof ApiError) {
+        toast.error(`Failed to create listing: ${error.message}`);
+      } else {
+        toast.error('Failed to create listing. Please try again.');
+      }
     }
 
   };
@@ -874,7 +1054,11 @@ export const CreateListing = () => {
           <StepBasics 
             formData={formData} 
             errors={errors} 
-            onChange={handleChange} 
+            onChange={handleChange}
+            onAddressSelect={(address) => {
+              setFormData(prev => ({ ...prev, address }));
+              if (errors.address) setErrors(prev => { const e = {...prev}; delete e.address; return e; });
+            }}
           />
         )}
 
@@ -883,11 +1067,9 @@ export const CreateListing = () => {
           <StepDetails 
             formData={formData} 
             errors={errors} 
-            imageUrlInput={imageUrlInput}
             onChange={handleChange}
-            onImageUrlChange={setImageUrlInput}
             onAmenityToggle={handleAmenityToggle}
-            onAddImage={handleAddImage}
+            onUploadImages={handleUploadImages}
             onRemoveImage={handleRemoveImage}
             onAddDemoImage={handleAddDemoImage}
           />
