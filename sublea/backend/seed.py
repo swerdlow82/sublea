@@ -29,6 +29,22 @@ def seed_database():
             db.commit()
             db.refresh(test_user)
 
+        test_user2 = db.query(User).filter(User.email == "test2@uoregon.edu").first()
+        if not test_user2:
+            print("Creating test user 2...")
+            test_user2 = User(
+                email="test2@uoregon.edu",
+                password_hash=hash_password("password123"),
+                is_verified=True,
+                age=22,
+                first_name="Test2",
+                last_name="User2",
+                gender="Female",
+            )
+            db.add(test_user2)
+            db.commit()
+            db.refresh(test_user2)
+
         print("Creating mock listings...")
 
         mock_listings = [
@@ -88,6 +104,26 @@ def seed_database():
                 available_from=datetime(2025, 6, 1, tzinfo=timezone.utc),
                 images="https://images.unsplash.com/photo-1484154218962-a1c002085d2f?q=80&w=800&auto=format&fit=crop",
                 anonymous_lister=True
+            ),
+            Listing(
+                user_id=test_user2.id,
+                title="Spacious Room in 4-Bed House",
+                description="Looking for one more roommate for the upcoming school year. House is fully furnished.",
+                rent=750,
+                address="1234 Emerald St",
+                city="Eugene",
+                state="OR",
+                zip_code="97403",
+                country="USA",
+                bedrooms=1,
+                bathrooms=1,
+                roommate_count=3,
+                available_from=datetime(2025, 9, 1, tzinfo=timezone.utc),
+                available_to=datetime(2026, 6, 15, tzinfo=timezone.utc),
+                images="https://images.unsplash.com/photo-1554995207-c18c203602cb?q=80&w=800&auto=format&fit=crop",
+                anonymous_lister=False,
+                lister_first_name=test_user2.first_name,
+                lister_last_name=test_user2.last_name
             )
         ]
 

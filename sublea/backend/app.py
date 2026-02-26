@@ -1,14 +1,15 @@
 ## temp import models during dev (auth)
 # later to be replaced with migrations
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, desc, and_
 from database import Base, engine, get_db
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 import os
 import random
+import json
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer
 
@@ -27,6 +28,7 @@ from schemas import (
     ListingResponse,
     MessageCreate,
     MessageResponse,
+    ConversationResponse,
 )
 from auth_utils import *
 from email_service import email_service
@@ -38,6 +40,24 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Sublea Backend API", version="1.0.0", description="Student exclusive subletting marketplace API")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[int, WebSocket] = {}
+
+    async def connect(self, user_id: int, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+
+    def disconnect(self, user_id: int):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+
+    async def send_personal_message(self, message: str, user_id: int):
+        if user_id in self.active_connections:
+            await self.active_connections[user_id].send_text(message)
+
+manager = ConnectionManager()
 
 app.add_middleware(
     CORSMiddleware,
@@ -301,7 +321,80 @@ def send_message(message_data: MessageCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(message)
 
-    return MessageResponse.from_orm(message)
+    msg_resp = MessageResponse.from_orm(message)
+    
+    # Instead of inline serialization use json.dumps with dict mapping since there could be datetime objects
+    import asyncio
+    msg_dict = msg_resp.dict()
+    msg_dict['sent_at'] = msg_dict['sent_at'].isoformat()
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(manager.send_personal_message(json.dumps(msg_dict), message_data.recipient_id))
+    except Exception:
+        pass
+
+    return msg_resp
+
+@app.get("/api/conversations", response_model=list[ConversationResponse])
+def get_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    messages = db.query(Message).filter(
+        or_(Message.sender_id == current_user.id, Message.recipient_id == current_user.id)
+    ).order_by(desc(Message.sent_at)).all()
+    
+    conversations = {}
+    for msg in messages:
+        other_id = msg.recipient_id if msg.sender_id == current_user.id else msg.sender_id
+        if other_id not in conversations:
+            other_user = db.query(User).filter(User.id == other_id).first()
+            if other_user:
+                unread = db.query(Message).filter(Message.sender_id == other_id, Message.recipient_id == current_user.id, Message.read == False).count()
+                conversations[other_id] = {
+                    "other_user": UserResponse.from_orm(other_user),
+                    "latest_message": MessageResponse.from_orm(msg),
+                    "unread_count": unread
+                }
+    return list(conversations.values())
+
+@app.get("/api/messages/{partner_id}", response_model=list[MessageResponse])
+def get_messages(partner_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    messages = db.query(Message).filter(
+        or_(
+            and_(Message.sender_id == current_user.id, Message.recipient_id == partner_id),
+            and_(Message.sender_id == partner_id, Message.recipient_id == current_user.id)
+        )
+    ).order_by(Message.sent_at.asc()).all()
+    
+    unreads = [m for m in messages if m.sender_id == partner_id and not m.read]
+    for m in unreads:
+        m.read = True
+    if unreads:
+        db.commit()
+        
+    return messages
+
+@app.websocket("/ws/messages")
+async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+    try:
+        payload = decode_access_token(token)
+        user_id = payload.get("user_id")
+        if not user_id:
+            await websocket.close()
+            return
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            await websocket.close()
+            return
+        
+        await manager.connect(user_id, websocket)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                # Placeholder for parsing received data if needed
+        except WebSocketDisconnect:
+            manager.disconnect(user_id)
+    except Exception as e:
+        await websocket.close()
+
 
 @app.post("/api/pages/password-reset-confirm")
 def password_reset_confirm(confirm_data: PasswordResetConfirm, db: Session = Depends(get_db)):
@@ -338,9 +431,7 @@ def listings_page():
     return {"message": "This is the listings page."}
 
 # Edit - TEE
-@app.get("/api/listings",
-response_model=list[ListingResponse])
-
+@app.get("/api/listings", response_model=list[ListingResponse])
 def get_all_listings(
     location: Optional[str] = None,
     minPrice: Optional[float] = None,
@@ -356,10 +447,7 @@ def get_all_listings(
     sortOrder: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Returns all listings from the database.
-    Can be edited in the future to add pageination and filters
-    """
+    # (Implementation remains same, just replacing to allow insertion)
     query = db.query(Listing).join(User, Listing.user_id == User.id)
 
     if location:
@@ -417,6 +505,14 @@ def get_all_listings(
 
     listings = query.all()
     return listings
+
+@app.get("/api/listings/{listing_id}", response_model=ListingResponse)
+def get_single_listing(listing_id: int, db: Session = Depends(get_db)):
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return listing
+
 
 @app.post("/api/listings/create")
 def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
