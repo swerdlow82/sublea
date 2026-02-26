@@ -68,6 +68,17 @@ class Listing(Base):
     anonymous_lister = Column(Boolean, default=False, nullable=False)
     lister_first_name = Column(String(50), nullable=True)
     lister_last_name = Column(String(50), nullable=True)
+    gender_preference = Column(String(50), nullable=True)
+    cleaning_habit = Column(String(50), nullable=True)
+    smoking_habit = Column(String(50), nullable=True)
+    pet_preference = Column(String(20), nullable=True)
+    drinking_habit = Column(String(20), nullable=True)
+    noise_tolerance = Column(String(20), nullable=True)
+    bed_time = Column(String(50), nullable=True)
+    wake_time = Column(String(20), nullable=True)
+    age_preference_min = Column(Integer, nullable=True)
+    age_preference_max = Column(Integer, nullable=True)
+    amenities = Column(Text, nullable=True) # Comma-separated amenities
 
     owner = relationship("User", back_populates="listings")
     messages = relationship("Message", back_populates="listing", cascade="all, delete-orphan")

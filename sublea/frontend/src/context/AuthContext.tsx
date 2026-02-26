@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiFetch } from '../api/client';
+import { toast } from 'react-hot-toast';
 
 export interface User {
   id: number;
@@ -37,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
       } catch (error) {
         console.error('Failed to fetch user', error);
+        toast.error('Session expired or Invalid. Please log in again.');
         localStorage.removeItem('authToken');
         sessionStorage.removeItem('authToken');
         setUser(null);

@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 
 // Layout
 import { Layout } from './src/components/layout/Layout';
+import { Toaster } from 'react-hot-toast';
 
 // Auth Components
 import { Login } from './src/components/auth/Login';
@@ -22,6 +23,7 @@ import { Settings } from './src/components/profile/Settings';
 const App = (): React.ReactElement => {
   return (
     <Layout>
+      <Toaster position="top-right" />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
