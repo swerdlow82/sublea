@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from '../../api/client';
 
 // Extended interface for detailed view
-interface ListingDetailData extends Listing {
+interface ListingDetailData extends Omit<Listing, 'images'> {
+  images: string[];
   description: string;
   amenities: string[];
   coordinates: { lat: number; lng: number };
@@ -181,13 +183,21 @@ interface RentActionCardProps {
   rent: number;
   availableFrom: string;
   availableTo: string;
+  listingId: string;
+  ownerId?: string;
 }
 
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const RentActionCard = ({ rent, availableFrom, availableTo }: RentActionCardProps) => {
+const RentActionCard = ({ rent, availableFrom, availableTo, listingId, ownerId }: RentActionCardProps) => {
+  const navigate = useNavigate();
+  const handleContactLister = async () => {
+    if(ownerId) {
+      navigate(`/inbox?recipientID=${ownerId}&listingID=${listingId}`);
+    }
+  };
   return (
     <div className="card border-t-4 border-t-[var(--primary)] animate-slide-up">
       <div className="mb-6">
@@ -297,53 +307,56 @@ const useFetchListing = (id: string | undefined) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     const fetchListing = async () => {
-      setLoading(true);
-      // Simulate API delay
-      // TODO: Implement API call to GET /listings/{id}
-      // Response needs rich mapping: 
-      // - amenities: MISSING in backend
-      // - coordinates: { lat: listing.latitude, lng: listing.longitude }
-      // - owner: map User fields (profile_picture -> avatar, etc.)
-      const timer = setTimeout(() => {
-        // Mock Response based on ID (In a real app, this would be a fetch call)
-        const mockListing: ListingDetailData = {
-          id: id || '1',
-          title: 'Sunlit Loft near UO Campus',
-          rent: 1450,
-          address: '1450 Alder St, Eugene, OR 97401',
-          bedrooms: 1,
-          bathrooms: 1,
-          roommates_count: 2,
-          available_from: '2024-06-01',
-          available_to: '2024-08-31',
-          images: [
-            'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1484154218962-a1c002085d2f?q=80&w=2560&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=2560&auto=format&fit=crop'
-          ],
-          anonymous_lister: false,
-          is_verified: true,
-          description: `Looking for a subletter for the summer semester! This is a spacious, fully furnished loft apartment located right next to the UO Campus. 
+      try{
+        setLoading(true);
+        const data = await apiFetch(`/api/listings/${id}`);
 
-The apartment features high ceilings, exposed brick walls, and huge windows that let in tons of natural light. You'll have your own private bedroom and bathroom, sharing the kitchen and living area with two quiet, respectful grad students from UO.
+        const mappedListing: ListingDetailData = {
+          ...data,
+          id: data.id.toString(),
+          // 1. Fix Image Mapping (handle empty strings)
+          images: data.images ? data.images.split(",").filter((img: string) => img.trim() !== "") : [],
+          
+          // 2. Fix Roommate Count (Backend uses singular 'roommate_count')
+          roommates_count: data.roommate_count || 0,
+          
+          // 3. Synthesize Owner object from flat backend fields
+          owner: data.anonymous_lister ? undefined : {
+            id: data.user_id.toString(),
+            name: `${data.lister_first_name} ${data.lister_last_name}`,
+            avatar: `https://ui-avatars.com/api/?name=${data.lister_first_name}+${data.lister_last_name}&background=random`,
+            bio: "Student at Sublea", // Placeholder as 'bio' isn't in current DB
+            tags: ['Verified Student', data.city].filter(Boolean)
+          },
 
-Rent includes all utilities and high-speed internet. Laundry is in the unit. Steps away from the Knight Library, grocery stores, and tons of cafes on 13th Ave.`,
-          amenities: ['In-unit Washer/Dryer', 'High-speed WiFi', 'Central AC', 'Dishwasher', 'Elevator', 'Gym in Building', 'Rooftop Access'],
-          coordinates: { lat: 44.0448, lng: -123.0726 }, 
-          owner: {
-             id: 'mock-owner-id',
-             name: 'Mock Owner',
-             avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200&auto=format&fit=crop',
-             bio: 'Temporary mock bio - replace with real data from API',
-             tags: ['Mock Tag 1', 'Mock Tag 2', 'Mock Tag 3']
-          }
+          // 4. Map Coordinates (Backend uses latitude/longitude)
+          coordinates: {
+            lat: data.latitude || 0,
+            lng: data.longitude || 0
+          },
+
+          // 5. Handle Amenities (If not in DB yet, provide a fallback)
+          amenities: data.amenities 
+            ? data.amenities.split(",").filter((a: string) => a.trim() !== "") 
+            : ['Furnished', 'Utilities Included', 'WiFi'],
+            
+          // Ensure dates are strings for the UI
+          available_from: data.available_from,
+          available_to: data.available_to,
         };
 
-        setListing(mockListing);
+        setListing(mappedListing);
+      } catch (error) {
+        console.error("Error fetching listing details:", error);
+        setListing(null);
+      } finally {
         setLoading(false);
-      }, 800);
+      }
     };
 
     fetchListing();
@@ -351,6 +364,8 @@ Rent includes all utilities and high-speed internet. Laundry is in the unit. Ste
 
   return { listing, loading };
 };
+
+
 
 export const ListingDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -403,6 +418,8 @@ export const ListingDetail = () => {
               rent={listing.rent}
               availableFrom={listing.available_from}
               availableTo={listing.available_to}
+              listingId={listing.id}
+              ownerId={listing.owner?.id}
             />
 
             {/* Owner Profile Card */}

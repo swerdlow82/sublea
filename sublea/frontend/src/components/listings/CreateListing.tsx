@@ -1,6 +1,8 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ListingCard, Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from '../../api/client';
+
 
 // TYPE DEFINITIONS
 
@@ -17,6 +19,16 @@ interface ListingFormData {
   images: string[];
   anonymous: boolean;
   amenities: string[];
+  prefGender: string;
+  prefAgeMin: string;
+  prefAgeMax: string;
+  habitCleaning: string;
+  habitSmoking: string;
+  habitPets: string;
+  habitDrinking: string;
+  habitNoise: string;
+  bedTime: string;
+  wakeTime: string;
 }
 
 type ValidationErrors = Record<string, string>;
@@ -44,6 +56,11 @@ interface StepDetailsProps {
   onAddImage: () => void;
   onRemoveImage: (index: number) => void;
   onAddDemoImage: () => void;
+}
+
+ interface StepPreferencesProps {
+  formData: ListingFormData;
+  onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
 }
 
 interface StepReviewProps {
@@ -74,7 +91,17 @@ const INITIAL_DATA: ListingFormData = {
   description: '',
   images: [],
   anonymous: false,
-  amenities: []
+  amenities: [],
+  prefGender: 'Any',
+  prefAgeMin: '',
+  prefAgeMax: '',
+  habitCleaning: '',
+  habitSmoking: '',
+  habitPets: '',
+  habitDrinking: '',
+  habitNoise: '',
+  bedTime: '',
+  wakeTime: '',
 };
 
 const AMENITIES_LIST = [
@@ -321,7 +348,7 @@ const StepDetails = ({
         {errors.images && <p className="text-red-500 text-xs mt-1">{errors.images}</p>}
       </div>
 
-      {/* Anonymous Toggle */}
+       {/* Anonymous Toggle */}
       <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--surface)] border border-[var(--border)]">
         <div>
           <h3 className="font-semibold text-[var(--text-main)]">Post Anonymously</h3>
@@ -337,6 +364,128 @@ const StepDetails = ({
           />
           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)]"></div>
         </label>
+      </div>
+    </div>
+  );
+};
+
+const StepPreferences = ({ formData, onChange }: StepPreferencesProps) => {
+  return (
+    <div className="space-y-8 animate-slide-up">
+      <div className="border-b border-[var(--border)] pb-4">
+        <h3 className="font-bold text-lg">Roommate Compatibility</h3>
+        <p className="text-sm text-[var(--text-muted)]">Set expectations or rules for your new roommate.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Demographics */}
+        <div className="space-y-6">
+          <h4 className="text-sm font-semibold text-[var(--primary)] uppercase tracking-wide">Demographics</h4>
+          <div className="input-group">
+            <label className="label">Preferred Gender</label>
+            <select name="prefGender" value={formData.prefGender} onChange={onChange} className="input">
+              <option value="Any">Any</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Non-binary">Non-binary</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="label mb-2 block">Age Range</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                name="prefAgeMin"
+                value={formData.prefAgeMin}
+                onChange={onChange}
+                className="input w-24 text-center"
+                min="16"
+              />
+              <span className="text-[var(--text-muted)]">to</span>
+              <input
+                type="number"
+                name="prefAgeMax"
+                value={formData.prefAgeMax}
+                onChange={onChange}
+                className="input w-24 text-center"
+                max="100"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Habits */}
+        <div className="space-y-6">
+          <h4 className="text-sm font-semibold text-[var(--primary)] uppercase tracking-wide">Lifestyle Habits</h4>
+          
+          <div className="input-group">
+            <label className="label">Cleanliness</label>
+            <select name="habitCleaning" value={formData.habitCleaning} onChange={onChange} className="input">
+              <option value="Very Tidy">Very Tidy</option>
+              <option value="Tidy">Tidy</option>
+              <option value="Relaxed">Relaxed</option>
+              <option value="Messy">Messy</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Smoking</label>
+            <select name="habitSmoking" value={formData.habitSmoking} onChange={onChange} className="input">
+              <option value="Non-smoker">Non-smoker</option>
+              <option value="Outside only">Outside only</option>
+              <option value="Okay with it">Okay with it</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Pets</label>
+            <select name="habitPets" value={formData.habitPets} onChange={onChange} className="input">
+              <option value="No pets">No pets</option>
+              <option value="Has pets">Has pets</option>
+              <option value="Pet-friendly">Pet-friendly (doesn't own)</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Drinking</label>
+            <select name="habitDrinking" value={formData.habitDrinking} onChange={onChange} className="input">
+              <option value="Non-drinker">Non-drinker</option>
+              <option value="Socially">Socially</option>
+              <option value="Frequently">Frequently</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Noise Tolerance</label>
+            <select name="habitNoise" value={formData.habitNoise} onChange={onChange} className="input">
+              <option value="">Select</option>
+              <option value="Quiet">Quiet (Study focused)</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Social">Social / Loud</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Bed Time</label>
+            <select name="bedTime" value={formData.bedTime} onChange={onChange} className="input">
+              <option value="">Select</option>
+              <option value="Early (Before 10 PM)">Early (Before 10 PM)</option>
+              <option value="Average (10 PM - 12 AM)">Average (10 PM - 12 AM)</option>
+              <option value="Night Owl (After 12 AM)">Night Owl (After 12 AM)</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Wake Time</label>
+            <select name="wakeTime" value={formData.wakeTime} onChange={onChange} className="input">
+              <option value="">Select</option>
+              <option value="Early Bird (Before 7 AM)">Early Bird (Before 7 AM)</option>
+              <option value="Average (7 AM - 9 AM)">Average (7 AM - 9 AM)</option>
+              <option value="Late Riser (After 9 AM)">Late Riser (After 9 AM)</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -421,9 +570,9 @@ const FormActions = ({ step, isSubmitting, onBack, onNext, onCancel, onSubmit }:
         </button>
       )}
 
-      {step < 3 ? (
+       {step < 4 ? (
         <button 
-          onClick={onNext}
+           onClick={onNext}
           className="btn btn-primary"
         >
           Next Step
@@ -522,6 +671,32 @@ export const CreateListing = () => {
     window.scrollTo(0, 0);
   }, [step]);
 
+  // Check Profile Completion on Mount
+  useEffect(() => {
+    const verifyProfile = async () => {
+      // Temporarily disabled for testing purposes
+      /*
+      try {
+        const data = await apiFetch('/api/users/me');
+        const requiredFields = [
+          data.first_name, data.last_name, data.age, data.bio, data.gender,
+          data.cleaning_habit, data.smoking_habit, data.pet_preference,
+          data.drinking_habit, data.noise_tolerance, data.bed_time, data.wake_time,
+          data.age_preference_min, data.age_preference_max
+        ];
+        
+        if (requiredFields.some(field => field === null || field === undefined || String(field).trim() === '')) {
+          alert('Please complete your profile set up to post a listing.');
+          navigate('/settings');
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile", error);
+      }
+      */
+    };
+    verifyProfile();
+  }, [navigate]);
+
   // Handle Input Change
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -616,19 +791,50 @@ export const CreateListing = () => {
     }
     
     setIsSubmitting(true);
-    // Simulate API call
-    // TODO: Implement API call to POST /listings
-    // Payload needs conversion:
-    // - rent: string -> float
-    // - bedrooms/bathrooms: string -> int
-    // - images: string[] -> string (comma-separated, OR handled by backend schema)
-    // - user_id: retrieve from running auth context
-    // CRITICAL ISSUE: 'amenities' field is missing in Backend Listing Model!
-    setTimeout(() => {
-      console.log('Form Submitted:', formData);
+
+    try {
+      const payload = {
+        user_id: 0, // backend uses current_user from token now
+        title: formData.title,
+        description: formData.description,
+        rent: parseFloat(formData.rent),
+        address: formData.address,
+        zip_code: "97401",
+        city: "Eugene",
+        state: "OR",
+        country: "USA",
+        bedrooms: parseInt(formData.bedrooms) || 0,
+        bathrooms: parseInt(formData.bathrooms) || 0,
+        roommate_count: parseInt(formData.roommates) || 0,
+        available_from: formData.availableFrom + "T00:00:00",
+        available_to: formData.availableTo ? formData.availableTo + "T00:00:00" : null,
+        images: formData.images.join(","),
+        anonymous_lister: formData.anonymous,
+        gender_preference: formData.prefGender,
+        age_preference_min: formData.prefAgeMin ? parseInt(formData.prefAgeMin) : null,
+        age_preference_max: formData.prefAgeMax ? parseInt(formData.prefAgeMax) : null,
+        cleaning_habit: formData.habitCleaning,
+        smoking_habit: formData.habitSmoking,
+        pet_preference: formData.habitPets,
+        drinking_habit: formData.habitDrinking,
+        noise_tolerance: formData.habitNoise,
+        bed_time: formData.bedTime,
+        wake_time: formData.wakeTime
+      };
+      console.log("Sending this payload to FastAPI:", payload);
+
+      const data = await apiFetch("/api/listings/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Successfully created listing in database:', data);
       setIsSubmitting(false);
       navigate('/browse'); // Redirect to browse after success
-    }, 2000);
+    } catch (error) {
+      console.error('Failed to create listing:', error);
+      setIsSubmitting(false);
+    }
   };
 
   // Create preview object compatible with ListingCard
@@ -641,7 +847,7 @@ export const CreateListing = () => {
     bathrooms: parseInt(formData.bathrooms) || 0,
     available_from: formData.availableFrom,
     available_to: formData.availableTo,
-    images: formData.images.length > 0 ? formData.images : [],
+    images: formData.images,
     anonymous_lister: formData.anonymous,
     is_verified: true // Preview as verified for visual check
   };
@@ -652,10 +858,11 @@ export const CreateListing = () => {
       {/* Header & Progress */}
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-[var(--text-main)] mb-6">List Your Place</h1>
-        <div className="flex items-center justify-center gap-4">
-          <ProgressStep stepNumber={1} label="The Basics" currentStep={step} />
-          <ProgressStep stepNumber={2} label="Details & Media" currentStep={step} />
-          <ProgressStep stepNumber={3} label="Review" currentStep={step} isLast />
+         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 w-full">
+          <ProgressStep stepNumber={1} label="Basics" currentStep={step} />
+          <ProgressStep stepNumber={2} label="Details" currentStep={step} />
+          <ProgressStep stepNumber={3} label="Preferences" currentStep={step} />
+          <ProgressStep stepNumber={4} label="Review" currentStep={step} isLast />
         </div>
       </div>
 
@@ -684,8 +891,16 @@ export const CreateListing = () => {
           />
         )}
 
-        {/* Step 3: Review */}
+         {/* Step 3: Preferences */}
         {step === 3 && (
+          <StepPreferences 
+             formData={formData} 
+             onChange={handleChange} 
+          />
+        )}
+
+        {/* Step 4: Review */}
+        {step === 4 && (
           <StepReview 
             formData={formData} 
             previewListing={previewListing} 

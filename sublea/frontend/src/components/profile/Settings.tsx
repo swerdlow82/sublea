@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, FormEvent, ChangeEvent, ReactNode, RefObject } from 'react';
+import { apiFetch } from '../../api/client';
 
 // --- Types ---
 type Tab = 'basic' | 'preferences' | 'account';
@@ -17,16 +18,6 @@ interface UserProfile {
   gender: string;
   age: number | '';
   
-  // Preferences
-  prefGender: string;
-  prefAgeMin: number;
-  prefAgeMax: number;
-  habitCleaning: string;
-  habitSmoking: string;
-  habitPets: string;
-  habitDrinking: string;
-  habitNoise: string;
-
   // Account
   email: string;
   isVerified: boolean;
@@ -53,11 +44,6 @@ interface BasicInfoTabProps {
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
 }
 
-interface PreferencesTabProps {
-  formData: UserProfile;
-  onInputChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
-}
-
 interface AccountTabProps {
   formData: UserProfile;
   onDeleteClick: () => void;
@@ -77,24 +63,15 @@ interface SaveButtonProps {
 }
 
 const INITIAL_PROFILE: UserProfile = {
-  firstName: 'John',
-  lastName: 'Doe',
-  avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop',
-  bio: 'Computer Science major at BU. I love coding, hiking, and exploring new coffee shops.',
-  gender: 'Male',
-  age: 21,
+  firstName: '',
+  lastName: '',
+  avatar: '',
+  bio: '',
+  gender: '',
+  age: '',
   
-  prefGender: 'Any',
-  prefAgeMin: 18,
-  prefAgeMax: 26,
-  habitCleaning: 'Tidy',
-  habitSmoking: 'Non-smoker',
-  habitPets: 'No pets',
-  habitDrinking: 'Socially',
-  habitNoise: 'Moderate',
-  
-  email: 'john.doe@bu.edu',
-  isVerified: true
+  email: '',
+  isVerified: false
 };
 
 // --- Sub-Components ---
@@ -232,106 +209,7 @@ const BasicInfoTab = ({ formData, onInputChange, onAvatarClick, fileInputRef, on
   );
 };
 
-const PreferencesTab = ({ formData, onInputChange }: PreferencesTabProps) => {
-  return (
-    <div className="space-y-8 animate-slide-up">
-      <div className="border-b border-[var(--border)] pb-4">
-        <h3 className="font-bold text-lg">Roommate Compatibility</h3>
-        <p className="text-sm text-[var(--text-muted)]">Set your preferences to help us find the best match for you.</p>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Demographics */}
-        <div className="space-y-6">
-          <h4 className="text-sm font-semibold text-[var(--primary)] uppercase tracking-wide">Demographics</h4>
-          <div className="input-group">
-            <label className="label">Preferred Gender</label>
-            <select name="prefGender" value={formData.prefGender} onChange={onInputChange} className="input">
-              <option value="Any">Any</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Non-binary">Non-binary</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="label mb-2 block">Age Range</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                name="prefAgeMin"
-                value={formData.prefAgeMin}
-                onChange={onInputChange}
-                className="input w-24 text-center"
-                min="16"
-              />
-              <span className="text-[var(--text-muted)]">to</span>
-              <input
-                type="number"
-                name="prefAgeMax"
-                value={formData.prefAgeMax}
-                onChange={onInputChange}
-                className="input w-24 text-center"
-                max="100"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Habits */}
-        <div className="space-y-6">
-          <h4 className="text-sm font-semibold text-[var(--primary)] uppercase tracking-wide">Lifestyle Habits</h4>
-          
-          <div className="input-group">
-            <label className="label">Cleanliness</label>
-            <select name="habitCleaning" value={formData.habitCleaning} onChange={onInputChange} className="input">
-              <option value="Very Tidy">Very Tidy</option>
-              <option value="Tidy">Tidy</option>
-              <option value="Relaxed">Relaxed</option>
-              <option value="Messy">Messy</option>
-            </select>
-          </div>
-
-          <div className="input-group">
-            <label className="label">Smoking</label>
-            <select name="habitSmoking" value={formData.habitSmoking} onChange={onInputChange} className="input">
-              <option value="Non-smoker">Non-smoker</option>
-              <option value="Outside only">Outside only</option>
-              <option value="Okay with it">Okay with it</option>
-            </select>
-          </div>
-
-          <div className="input-group">
-            <label className="label">Pets</label>
-            <select name="habitPets" value={formData.habitPets} onChange={onInputChange} className="input">
-              <option value="No pets">No pets</option>
-              <option value="Has pets">Has pets</option>
-              <option value="Pet-friendly">Pet-friendly (doesn't own)</option>
-            </select>
-          </div>
-
-          <div className="input-group">
-            <label className="label">Drinking</label>
-            <select name="habitDrinking" value={formData.habitDrinking} onChange={onInputChange} className="input">
-              <option value="Non-drinker">Non-drinker</option>
-              <option value="Socially">Socially</option>
-              <option value="Frequently">Frequently</option>
-            </select>
-          </div>
-
-          <div className="input-group">
-            <label className="label">Noise Tolerance</label>
-            <select name="habitNoise" value={formData.habitNoise} onChange={onInputChange} className="input">
-              <option value="Quiet">Quiet (Study focused)</option>
-              <option value="Moderate">Moderate</option>
-              <option value="Social">Social / Loud</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const AccountTab = ({ formData, onDeleteClick }: AccountTabProps) => {
   return (
@@ -474,6 +352,27 @@ export const Settings = () => {
     return () => clearTimeout(timer);
   }, [notification]);
 
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const data = await apiFetch('/api/users/me');
+        setFormData({
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          avatar: data.profile_picture || '',
+          bio: data.bio || '',
+          gender: data.gender || '',
+          age: data.age || '',
+          email: data.email || '',
+          isVerified: !!data.is_verified,
+        });
+      } catch (error) {
+        setNotification({ type: 'error', message: 'Failed to load profile.' });
+      }
+    };
+    fetchProfile();
+  }, []);
+
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -506,13 +405,7 @@ export const Settings = () => {
     return true;
   };
 
-  const validatePreferences = (): boolean => {
-    if (formData.prefAgeMin > formData.prefAgeMax) {
-      setNotification({ type: 'error', message: 'Minimum age cannot be greater than maximum age.' });
-      return false;
-    }
-    return true;
-  };
+
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -523,16 +416,37 @@ export const Settings = () => {
       return;
     }
 
-    if (activeTab === 'preferences' && !validatePreferences()) {
-      setIsSaving(false);
-      return;
-    }
 
-    setTimeout(() => {
-      setIsSaving(false);
+
+    try {
+      await apiFetch('/api/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          age: formData.age || null,
+          bio: formData.bio || null,
+          gender: formData.gender || null,
+          profile_picture: formData.avatar || null
+        })
+      });
       setNotification({ type: 'success', message: 'Changes saved successfully.' });
-    }, 1000);
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Failed to save changes.' });
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const calculateCompletion = () => {
+    const requiredFields = [
+      formData.firstName, formData.lastName, formData.age, formData.bio, formData.gender
+    ];
+    const filled = requiredFields.filter(f => f !== '' && f !== null && f !== undefined && String(f).trim() !== '').length;
+    return Math.round((filled / requiredFields.length) * 100);
+  };
+
+  const completionPercentage = calculateCompletion();
 
   const handleDeleteAccount = () => {
     console.log('Deleting account...');
@@ -542,9 +456,23 @@ export const Settings = () => {
   return (
     <div className="max-w-4xl mx-auto pb-20 relative">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[var(--text-main)]">Profile Settings</h1>
-        <p className="text-[var(--text-muted)] mt-1">Manage your public profile and roommate preferences.</p>
+      <div className="mb-8 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-main)]">Profile Settings</h1>
+          <p className="text-[var(--text-muted)] mt-1">Manage your public profile and roommate preferences.</p>
+        </div>
+        <div className="flex flex-col sm:items-end">
+          <span className="text-sm font-medium mb-1 truncate w-full sm:max-w-[200px]">Profile Completion Status</span>
+          <div className="flex items-center gap-3 w-48">
+            <div className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-full h-2">
+              <div className="bg-[var(--primary)] h-full rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%` }}></div>
+            </div>
+            <span className="text-sm font-bold text-[var(--primary)]">{completionPercentage}%</span>
+          </div>
+          {completionPercentage < 100 && (
+            <span className="text-[10px] text-[var(--text-muted)] mt-1">100% required to post listings</span>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -554,9 +482,6 @@ export const Settings = () => {
           <nav className="glass-panel p-2 flex md:flex-col gap-1 sticky top-24 overflow-x-auto md:overflow-visible scrollbar-hide">
             <TabButton active={activeTab === 'basic'} onClick={() => setActiveTab('basic')}>
               Basic Info
-            </TabButton>
-            <TabButton active={activeTab === 'preferences'} onClick={() => setActiveTab('preferences')}>
-              Roommate Preferences
             </TabButton>
             <TabButton active={activeTab === 'account'} onClick={() => setActiveTab('account')}>
               Account
@@ -577,12 +502,7 @@ export const Settings = () => {
               />
             )}
 
-            {activeTab === 'preferences' && (
-              <PreferencesTab 
-                formData={formData}
-                onInputChange={handleInputChange}
-              />
-            )}
+
 
             {activeTab === 'account' && (
               <AccountTab 

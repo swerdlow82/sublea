@@ -137,8 +137,14 @@ export const Verification = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const email = location.state?.email || 'student@university.edu';
-  
+  const email = location.state?.email;
+
+  useEffect(() => {
+    if (!email) {
+      navigate('/register');
+    }
+  }, [email, navigate]);
+
   const [code, setCode] = useState<string[]>(new Array(CODE_LENGTH).fill(''));
   const [timer, setTimer] = useCountdownTimer(INITIAL_TIMER);
   const [status, setStatus] = useState<VerificationStatus>('idle');
@@ -154,22 +160,32 @@ export const Verification = () => {
     setStatus('loading');
     setErrorMessage('');
 
-    // Simulate API Network Delay
-    // TODO: Implement API call to POST /auth/verify
-    // Payload: { email, code: verificationCode }
-    // Response: Success/Error
-    setTimeout(() => {
-      if (verificationCode === CORRECT_CODE) {
-        setStatus('success');
-        setTimeout(() => {
-          console.log('Verification successful'); 
-          // navigate('/dashboard'); 
-        }, SUCCESS_REDIRECT_DELAY);
-      } else {
-        setStatus('error');
-        setErrorMessage('Incorrect verification code. Please try again.');
+    try{
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: verificationCode })
+      });
+
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.indexOf('application/json') !== -1) {
+        data = await response.json();
       }
-    }, VERIFICATION_DELAY);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Verification failed. Please try again.');
+      }
+      
+      setStatus('success');
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, SUCCESS_REDIRECT_DELAY);
+    } catch (error: any) {
+      setStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred. Please try again.');
+    }
+
   };
 
   const handleCodeChange = (index: number, value: string) => {

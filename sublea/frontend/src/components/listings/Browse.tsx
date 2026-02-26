@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ListingCard, Listing } from '../../components/listings/ListingCard';
+import { apiFetch } from '../../api/client';
 
 interface FilterState {
   location: string;
@@ -8,6 +9,13 @@ interface FilterState {
   bedrooms: string;
   bathrooms: string;
   moveInDate: string;
+  prefGender: string;
+  habitCleaning: string;
+  habitSmoking: string;
+  habitPets: string;
+  habitDrinking: string;
+  habitNoise: string;
+  sortOrder: string;
 }
 
 interface BrowseHeaderProps {
@@ -35,6 +43,13 @@ const INITIAL_FILTERS: FilterState = {
   bedrooms: 'any',
   bathrooms: 'any',
   moveInDate: '',
+  prefGender: 'Any',
+  habitCleaning: 'Any',
+  habitSmoking: 'Any',
+  habitPets: 'Any',
+  habitDrinking: 'Any',
+  habitNoise: 'Any',
+  sortOrder: 'newest',
 };
 
 const ITEMS_PER_PAGE = 6;
@@ -192,6 +207,87 @@ const FilterBar = ({ filters, onFilterChange }: FilterBarProps) => {
           </button>
         </div>
 
+        {/* Roommate Preferences & Sort */}
+        <div className="md:col-span-12 border-t border-[var(--border)] pt-4 mt-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3">
+            <p className="text-sm font-semibold text-[var(--text-main)] m-0">Roommate Preferences</p>
+            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+              <span className="text-sm text-[var(--text-muted)]">Sort by:</span>
+              <select
+                className="input py-1 px-2 cursor-pointer text-sm w-auto"
+                value={filters.sortOrder}
+                onChange={(e) => onFilterChange('sortOrder', e.target.value)}
+              >
+                <option value="newest">Newest First</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.prefGender}
+              onChange={(e) => onFilterChange('prefGender', e.target.value)}
+            >
+              <option value="Any">Any Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Non-binary">Non-binary</option>
+            </select>
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.habitCleaning}
+              onChange={(e) => onFilterChange('habitCleaning', e.target.value)}
+            >
+              <option value="Any">Any Cleanliness</option>
+              <option value="Very Tidy">Very Tidy</option>
+              <option value="Tidy">Tidy</option>
+              <option value="Relaxed">Relaxed</option>
+              <option value="Messy">Messy</option>
+            </select>
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.habitSmoking}
+              onChange={(e) => onFilterChange('habitSmoking', e.target.value)}
+            >
+              <option value="Any">Any Smoking</option>
+              <option value="Non-smoker">Non-smoker</option>
+              <option value="Outside only">Outside only</option>
+              <option value="Okay with it">Okay with it</option>
+            </select>
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.habitPets}
+              onChange={(e) => onFilterChange('habitPets', e.target.value)}
+            >
+              <option value="Any">Any Pet Pref</option>
+              <option value="No pets">No pets</option>
+              <option value="Has pets">Has pets</option>
+              <option value="Pet-friendly">Pet-friendly</option>
+            </select>
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.habitDrinking}
+              onChange={(e) => onFilterChange('habitDrinking', e.target.value)}
+            >
+              <option value="Any">Any Drinking</option>
+              <option value="Non-drinker">Non-drinker</option>
+              <option value="Socially">Socially</option>
+              <option value="Frequently">Frequently</option>
+            </select>
+            <select
+              className="input py-2 cursor-pointer text-sm"
+              value={filters.habitNoise}
+              onChange={(e) => onFilterChange('habitNoise', e.target.value)}
+            >
+              <option value="Any">Any Noise Tol</option>
+              <option value="Quiet">Quiet</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Social">Social / Loud</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -281,12 +377,27 @@ export const Browse = () => {
   useEffect(() => {
     const loadListings = async () => {
       setIsLoading(true);
-      
-      // TODO: Replace fetchListings with actual API call
-      const data = await fetchListings(filters);
-      
-      setListings(data);
-      setIsLoading(false);
+
+      try {
+        const queryParams = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value && value !== 'any' && value !== 'Any' && value !== 'newest') {
+            queryParams.append(key, value as string);
+          } else if (key === 'sortOrder' && value === 'newest') {
+            queryParams.append(key, value as string);
+          }
+        });
+
+        const data = await apiFetch(`/api/listings?${queryParams.toString()}`);
+
+        console.log("Real listings from DB: ", data);
+        setListings(data);
+      } catch (error) {
+        console.error("Failed to load listings:", error);
+        setListings([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadListings();
