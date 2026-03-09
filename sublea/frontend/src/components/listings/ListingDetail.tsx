@@ -1,23 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Listing } from '../../components/listings/ListingCard';
-import { apiFetch } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { useListingDetail } from '../../hooks/useListingDetail';
+import { ListingDetailData } from '../../types/listing';
+import { formatLongDate } from '../../utils/formatDate';
+import { GoogleMap } from '../common/GoogleMap';
 
-// Extended interface for detailed view
-interface ListingDetailData extends Omit<Listing, 'images'> {
-  images: string[];
-  description: string;
-  amenities: string[];
-  coordinates: { lat: number; lng: number };
-  roommates_count: number;
-  owner?: {
-    id: string;
-    name: string;
-    avatar: string;
-    bio: string;
-    tags: string[];
-  };
-}
 
 interface ImageGalleryProps {
   images: string[];
@@ -26,33 +14,35 @@ interface ImageGalleryProps {
   onIndexChange: (index: number) => void;
 }
 
-const ImageGallery = ({ images, title, activeIndex, onIndexChange }: ImageGalleryProps) => {
-  return (
-    <div className="space-y-4">
-      <div className="aspect-video w-full overflow-hidden rounded-[var(--radius-card)] bg-[var(--surface)] shadow-lg relative group">
-        <img 
-          src={images[activeIndex]} 
-          alt={title} 
-          className="h-full w-full object-cover transition-transform duration-500"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-      </div>
-      
-      {/* Thumbnails */}
-      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-        {images.map((img, idx) => (
-          <button 
-            key={idx}
-            onClick={() => onIndexChange(idx)}
-            className={`relative flex-shrink-0 h-20 w-32 rounded-lg overflow-hidden border-2 transition-all ${activeIndex === idx ? 'border-[var(--primary)] ring-2 ring-[var(--ring)]' : 'border-transparent opacity-70 hover:opacity-100'}`}
-          >
-            <img src={img} alt={`View ${idx + 1}`} className="h-full w-full object-cover" />
-          </button>
-        ))}
-      </div>
+const ImageGallery = ({ images, title, activeIndex, onIndexChange }: ImageGalleryProps) => (
+  <div className="space-y-4">
+    <div className="aspect-video w-full overflow-hidden rounded-[var(--radius-card)] bg-[var(--surface)] shadow-lg relative group">
+      <img
+        src={images[activeIndex]}
+        alt={title}
+        className="h-full w-full object-cover transition-transform duration-500"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
     </div>
-  );
-};
+
+    {/* Thumbnails */}
+    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+      {images.map((img, idx) => (
+        <button
+          key={idx}
+          onClick={() => onIndexChange(idx)}
+          className={`relative flex-shrink-0 h-20 w-32 rounded-lg overflow-hidden border-2 transition-all ${
+            activeIndex === idx
+              ? 'border-[var(--primary)] ring-2 ring-[var(--ring)]'
+              : 'border-transparent opacity-70 hover:opacity-100'
+          }`}
+        >
+          <img src={img} alt={`View ${idx + 1}`} className="h-full w-full object-cover" />
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 interface QuickStatsProps {
   bedrooms: number;
@@ -100,47 +90,29 @@ const QuickStats = ({ bedrooms, bathrooms, roommatesCount }: QuickStatsProps) =>
   );
 };
 
-interface AmenitiesListProps {
-  amenities: string[];
-}
-
-const AmenitiesList = ({ amenities }: AmenitiesListProps) => {
-  return (
-    <div>
-      <h3 className="text-lg font-bold mb-3">Amenities</h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {amenities.map((amenity, idx) => (
-          <div key={idx} className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-            <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            {amenity}
-          </div>
-        ))}
-      </div>
+const AmenitiesList = ({ amenities }: { amenities: string[] }) => (
+  <div>
+    <h3 className="text-lg font-bold mb-3">Amenities</h3>
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {amenities.map((amenity, idx) => (
+        <div key={idx} className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          {amenity}
+        </div>
+      ))}
     </div>
-  );
-};
+  </div>
+);
 
-const MapPlaceholder = () => {
-  return (
-    <div className="card h-64 flex items-center justify-center bg-[var(--surface)] relative overflow-hidden group cursor-pointer">
-      <div className="absolute inset-0 opacity-50 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/Map_placeholder.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110"></div>
-      <div className="z-10 bg-white/90 dark:bg-black/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg flex items-center gap-2">
-        <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.806-.984A1 1 0 0021 7.618l-5.447 2.724A1 1 0 0115 11.382V20" />
-        </svg>
-        <span className="font-medium">View on Map</span>
-      </div>
-    </div>
-  );
-};
+// hides the address for anonymous listings if the viewer isn't signed in
+const DescriptionCard = ({ listing }: { listing: ListingDetailData }) => {
+  const { user } = useAuth();
+  const displayAddress = listing.anonymous_lister && !user
+    ? 'Address hidden (Sign in to view)'
+    : listing.address;
 
-interface DescriptionCardProps {
-  listing: ListingDetailData;
-}
-
-const DescriptionCard = ({ listing }: DescriptionCardProps) => {
   return (
     <div className="card space-y-6">
       <div className="flex justify-between items-start border-b border-[var(--border)] pb-6">
@@ -151,7 +123,7 @@ const DescriptionCard = ({ listing }: DescriptionCardProps) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>{listing.address}</span>
+            <span>{displayAddress}</span>
           </div>
         </div>
         {listing.is_verified && (
@@ -161,17 +133,11 @@ const DescriptionCard = ({ listing }: DescriptionCardProps) => {
         )}
       </div>
 
-      <QuickStats 
-        bedrooms={listing.bedrooms} 
-        bathrooms={listing.bathrooms} 
-        roommatesCount={listing.roommates_count} 
-      />
+      <QuickStats bedrooms={listing.bedrooms} bathrooms={listing.bathrooms} roommatesCount={listing.roommates_count} />
 
       <div>
         <h3 className="text-lg font-bold mb-3">About this place</h3>
-        <p className="text-[var(--text-muted)] leading-relaxed whitespace-pre-line">
-          {listing.description}
-        </p>
+        <p className="text-[var(--text-muted)] leading-relaxed whitespace-pre-line">{listing.description}</p>
       </div>
 
       <AmenitiesList amenities={listing.amenities} />
@@ -186,63 +152,47 @@ interface RentActionCardProps {
   onMessageLister: () => void;
 }
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-};
-
-const RentActionCard = ({ rent, availableFrom, availableTo, onMessageLister }: RentActionCardProps) => {
-  return (
-    <div className="card border-t-4 border-t-[var(--primary)] animate-slide-up">
-      <div className="mb-6">
-        <div className="flex items-end gap-1 mb-1">
-          <span className="text-3xl font-bold text-[var(--text-main)]">${rent.toLocaleString()}</span>
-          <span className="text-[var(--text-muted)] mb-1">/ month</span>
-        </div>
-        <div className="text-sm font-medium text-[var(--text-muted)] bg-[var(--surface)] inline-block px-3 py-1 rounded-full border border-[var(--border)]">
-          Available: {formatDate(availableFrom)} - {formatDate(availableTo)}
-        </div>
+const RentActionCard = ({ rent, availableFrom, availableTo, onMessageLister }: RentActionCardProps) => (
+  <div className="card border-t-4 border-t-[var(--primary)] animate-slide-up">
+    <div className="mb-6">
+      <div className="flex items-end gap-1 mb-1">
+        <span className="text-3xl font-bold text-[var(--text-main)]">${rent.toLocaleString()}</span>
+        <span className="text-[var(--text-muted)] mb-1">/ month</span>
       </div>
-
-      <button onClick={onMessageLister} className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
-        Message Lister
-      </button>
-      <button className="btn btn-outline w-full py-2.5">
-        Save for Later
-      </button>
-      
-      <p className="text-xs text-center text-[var(--text-muted)] mt-4">
-        Sublea connects you directly. All payments handled between parties.
-      </p>
+      <div className="text-sm font-medium text-[var(--text-muted)] bg-[var(--surface)] inline-block px-3 py-1 rounded-full border border-[var(--border)]">
+        Available: {formatLongDate(availableFrom)} - {formatLongDate(availableTo)}
+      </div>
     </div>
-  );
-};
+
+    <button onClick={onMessageLister} className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
+      Message Lister
+    </button>
+    <button className="btn btn-outline w-full py-2.5">Save for Later</button>
+
+    <p className="text-xs text-center text-[var(--text-muted)] mt-4">
+      Sublea connects you directly. All payments handled between parties.
+    </p>
+  </div>
+);
 
 interface OwnerProfileCardProps {
-  owner: {
-    id: string;
-    name: string;
-    avatar?: string;
-    bio: string;
-    tags: string[];
-  };
+  owner: NonNullable<ListingDetailData['owner']>;
 }
 
 const OwnerProfileCard = ({ owner }: OwnerProfileCardProps) => {
+  const initials = owner.name
+    ? owner.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+    : 'U';
+
   return (
     <div className="card animate-slide-up delay-100">
       <h3 className="font-bold text-[var(--text-main)] mb-4">Meet the Lister</h3>
       <div className="flex items-center gap-4 mb-4">
         {owner.avatar ? (
-          <img 
-            src={owner.avatar} 
-            alt={owner.name} 
-            className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]"
-          />
+          <img src={owner.avatar} alt={owner.name} className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]" />
         ) : (
           <div className="w-16 h-16 rounded-full border-2 border-[var(--surface)] ring-2 ring-[var(--border)] flex items-center justify-center bg-[var(--surface)]">
-             <span className="text-xl font-bold text-[var(--text-main)]">
-               {owner.name ? owner.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
-             </span>
+            <span className="text-xl font-bold text-[var(--text-main)]">{initials}</span>
           </div>
         )}
         <div>
@@ -250,129 +200,64 @@ const OwnerProfileCard = ({ owner }: OwnerProfileCardProps) => {
           <p className="text-xs text-[var(--text-muted)]">Verified Student</p>
         </div>
       </div>
-      
+
       <p className="text-sm text-[var(--text-main)] italic mb-4">"{owner.bio}"</p>
-      
+
       <div className="flex flex-wrap gap-2">
         {owner.tags.map((tag, idx) => (
-          <span key={idx} className="badge bg-[var(--secondary)] text-[var(--secondary-foreground)] border-transparent">
-            {tag}
-          </span>
+          <span key={idx} className="badge bg-[var(--secondary)] text-[var(--secondary-foreground)] border-transparent">{tag}</span>
         ))}
       </div>
     </div>
   );
 };
 
-const SafetyTip = () => {
-  return (
-    <div className="p-4 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text-muted)] flex items-start gap-3">
-      <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+const SafetyTip = () => (
+  <div className="p-4 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text-muted)] flex items-start gap-3">
+    <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <p>Sublea connects you with listers. Always meet in person, view the property, and handle all payments directly with the lister.</p>
+  </div>
+);
+
+const LoadingState = () => (
+  <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <svg className="h-10 w-10 animate-spin text-[var(--primary)]" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
       </svg>
-      <p>Sublea connects you with listers. Always meet in person, view the property, and handle all payments directly with the lister.</p>
+      <span className="text-[var(--text-muted)] animate-pulse">Loading listing details...</span>
     </div>
-  );
-};
+  </div>
+);
 
-const LoadingState = () => {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <svg className="h-10 w-10 animate-spin text-[var(--primary)]" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span className="text-[var(--text-muted)] animate-pulse">Loading listing details...</span>
-      </div>
-    </div>
-  );
-};
+//main 
 
-interface NotFoundStateProps {
-  onNavigate: () => void;
-}
-
-const NotFoundState = ({ onNavigate }: NotFoundStateProps) => {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <h2 className="text-2xl font-bold text-[var(--text-main)] mb-2">Listing not found</h2>
-      <p className="text-[var(--text-muted)] mb-6">The listing you are looking for might have been removed or does not exist.</p>
-      <button onClick={onNavigate} className="btn btn-primary">Back to Browse</button>
-    </div>
-  );
-};
-
-const useFetchListing = (id: string | undefined) => {
-  const [listing, setListing] = useState<ListingDetailData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchListing = async () => {
-      setLoading(true);
-      if (!id) return;
-      try {
-        const backendListing = await apiFetch(`/api/listings/${id}`);
-
-        const mockListing: ListingDetailData = {
-          id: backendListing.id.toString(),
-          title: backendListing.title,
-          rent: backendListing.rent,
-          address: backendListing.address,
-          bedrooms: backendListing.bedrooms,
-          bathrooms: backendListing.bathrooms,
-          roommates_count: backendListing.roommate_count,
-          available_from: backendListing.available_from,
-          available_to: backendListing.available_to,
-          images: backendListing.images ? backendListing.images.split(',') : [
-            'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=2560&auto=format&fit=crop',
-          ],
-          anonymous_lister: backendListing.anonymous_lister,
-          is_verified: true, // Mocked for now
-          description: backendListing.description || 'No description provided.',
-          amenities: ['In-unit Washer/Dryer', 'High-speed WiFi'],
-          coordinates: { lat: backendListing.latitude || 44.0448, lng: backendListing.longitude || -123.0726 }, 
-          owner: {
-             id: backendListing.user_id.toString(),
-             name: backendListing.lister_first_name ? `${backendListing.lister_first_name} ${backendListing.lister_last_name}` : 'Unknown Lister',
-             avatar: backendListing.lister_profile_picture || undefined,
-             bio: 'Sublea User',
-             tags: ['Verified']
-          }
-        };
-
-        setListing(mockListing);
-      } catch (error) {
-        console.error("Failed to fetch listing:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchListing();
-  }, [id]);
-
-  return { listing, loading };
-};
 
 export const ListingDetail = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { id }                       = useParams<{ id: string }>();
+  const navigate                     = useNavigate();
+  const { user }                     = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const { listing, loading } = useFetchListing(id);
+  const { listing, loading }         = useListingDetail(id);
 
-  if (loading) {
-    return <LoadingState />;
-  }
+  if (loading) return <LoadingState />;
 
   if (!listing) {
-    return <NotFoundState onNavigate={() => navigate('/browse')} />;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold text-[var(--text-main)] mb-2">Listing not found</h2>
+        <p className="text-[var(--text-muted)] mb-6">The listing you are looking for might have been removed or does not exist.</p>
+        <button onClick={() => navigate('/browse')} className="btn btn-primary">Back to Browse</button>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-8 pb-12 animate-fade-in">
-      
-      {/* Navigation Breadcrumb */}
+      {/* Back Nav */}
       <button onClick={() => navigate(-1)} className="flex items-center text-sm text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors mb-4">
         <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -380,13 +265,10 @@ export const ListingDetail = () => {
         Back to listings
       </button>
 
-      {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column: Images & Description (Takes 2/3 width) */}
+        {/* Left: Images + Description (2/3) */}
         <div className="lg:col-span-2 space-y-8">
-          
-          <ImageGallery 
+          <ImageGallery
             images={listing.images}
             title={listing.title}
             activeIndex={activeImageIndex}
@@ -395,30 +277,49 @@ export const ListingDetail = () => {
 
           <DescriptionCard listing={listing} />
 
-          <MapPlaceholder />
-        </div>
-
-        {/* Right Column: Sticky Sidebar (Takes 1/3 width) */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-24 space-y-6">
-            
-            <RentActionCard 
-              rent={listing.rent}
-              availableFrom={listing.available_from}
-              availableTo={listing.available_to}
-              onMessageLister={() => navigate('/inbox', { state: { listingId: listing.id, targetId: listing.owner?.id, targetName: listing.owner?.name, targetAvatar: listing.owner?.avatar, listingTitle: listing.title, startNewConversation: true }})}
+          {/* Map */}
+          <div className="card">
+            <h3 className="text-lg font-bold mb-4">Location</h3>
+            <GoogleMap
+              center={listing.coordinates}
+              markers={[{ id: listing.id, lat: listing.coordinates.lat, lng: listing.coordinates.lng, title: listing.title }]}
+              height="350px"
+              zoom={15}
             />
-
-            {/* Owner Profile Card */}
-            {!listing.anonymous_lister && listing.owner && (
-              <OwnerProfileCard owner={listing.owner} />
+            {listing.anonymous_lister && !user && (
+              <p className="text-xs text-[var(--text-muted)] mt-2">Exact location hidden. Sign in to view full details.</p>
             )}
-            
-            <SafetyTip />
-
           </div>
         </div>
 
+        {/* Right: Sticky Sidebar (1/3) */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-24 space-y-6">
+            <RentActionCard
+              rent={listing.rent}
+              availableFrom={listing.available_from}
+              availableTo={listing.available_to}
+              onMessageLister={() =>
+                navigate('/inbox', {
+                  state: {
+                    listingId:            listing.id,
+                    targetId:             listing.owner?.id,
+                    targetName:           listing.owner?.name,
+                    targetAvatar:         listing.owner?.avatar,
+                    listingTitle:         listing.title,
+                    startNewConversation: true,
+                  },
+                })
+              }
+            />
+
+            {!listing.anonymous_lister && listing.owner && (
+              <OwnerProfileCard owner={listing.owner} />
+            )}
+
+            <SafetyTip />
+          </div>
+        </div>
       </div>
     </div>
   );

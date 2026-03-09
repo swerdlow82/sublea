@@ -40,7 +40,6 @@ const BrandLogo = () => (
 const AuthenticatedLinks = () => (
   <>
     <NavLink to="/dashboard">My Listings</NavLink>
-    <NavLink to="/inbox">Inbox</NavLink>
   </>
 );
 
@@ -49,7 +48,7 @@ const NavigationLinks = ({ isLoggedIn }: { isLoggedIn: boolean }) => (
     <NavLink to="/">Home</NavLink>
     <NavLink to="/browse">Browse</NavLink>
     {isLoggedIn && <AuthenticatedLinks />}
-    <NavLink to="/about">About Us</NavLink>
+    <NavLink to="/contact">About Us</NavLink>
     <NavLink to="/contact">Contact Us</NavLink>
   </nav>
 );
