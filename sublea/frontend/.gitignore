@@ -28,3 +28,9 @@ dist-ssr
 # Vite cache
 .vite
 .vite/
+
+# Testing
+coverage
+playwright-report
+test-results
+

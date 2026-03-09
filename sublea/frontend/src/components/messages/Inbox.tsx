@@ -215,7 +215,7 @@ const ThreadHeader = ({ thread, onBack }: ThreadHeaderProps) => {
       </button>
 
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
           <UserAvatar user={thread.otherUser} size="md" />
         </div>
         <div className="flex-1 min-w-0">

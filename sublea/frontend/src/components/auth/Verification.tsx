@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, ClipboardEvent, KeyboardEvent, MutableRefObject } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 type VerificationStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -30,15 +32,12 @@ interface VerifyButtonProps {
 
 const CODE_LENGTH = 6;
 const INITIAL_TIMER = 60;
-const VERIFICATION_DELAY = 1500;
-const SUCCESS_REDIRECT_DELAY = 2000;
-const CORRECT_CODE = '123456'; // Mock verification code
 
 const SuccessOverlay = ({ show }: SuccessOverlayProps) => {
   if (!show) return null;
 
   return (
-    <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
+    <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 z-20 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
       <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
         <svg className="w-10 h-10 text-green-600 animate-scale-in" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -136,7 +135,8 @@ const useCountdownTimer = (initialValue: number) => {
 export const Verification = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+  const { fetchUser } = useAuth();
+
   const email = location.state?.email || 'student@university.edu';
   
   const [code, setCode] = useState<string[]>(new Array(CODE_LENGTH).fill(''));
@@ -154,22 +154,21 @@ export const Verification = () => {
     setStatus('loading');
     setErrorMessage('');
 
-    // Simulate API Network Delay
-    // TODO: Implement API call to POST /auth/verify
-    // Payload: { email, code: verificationCode }
-    // Response: Success/Error
-    setTimeout(() => {
-      if (verificationCode === CORRECT_CODE) {
-        setStatus('success');
-        setTimeout(() => {
-          console.log('Verification successful'); 
-          // navigate('/dashboard'); 
-        }, SUCCESS_REDIRECT_DELAY);
-      } else {
-        setStatus('error');
-        setErrorMessage('Incorrect verification code. Please try again.');
-      }
-    }, VERIFICATION_DELAY);
+    try {
+      await apiFetch('/api/verify', {
+        method: 'POST',
+        body: JSON.stringify({ email, code: verificationCode })
+      });
+      // Hydrate AuthContext so protected routes immediately see the verified user
+      await fetchUser();
+      setStatus('success');
+      navigate('/dashboard');
+    } catch (err) {
+      setStatus('error');
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Incorrect verification code. Please try again.'
+      );
+    }
   };
 
   const handleCodeChange = (index: number, value: string) => {
@@ -220,15 +219,25 @@ export const Verification = () => {
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (timer > 0) return;
-    
+
     setTimer(INITIAL_TIMER);
     setStatus('idle');
     setErrorMessage('');
     setCode(new Array(CODE_LENGTH).fill(''));
     inputRefs.current[0]?.focus();
-    console.log("Resending code to", email);
+
+    try {
+      await apiFetch('/api/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Failed to resend code. Please try again.'
+      );
+    }
   };
 
   return (
