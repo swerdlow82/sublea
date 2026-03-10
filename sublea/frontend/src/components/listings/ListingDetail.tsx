@@ -183,21 +183,14 @@ interface RentActionCardProps {
   rent: number;
   availableFrom: string;
   availableTo: string;
-  listingId: string;
-  ownerId?: string;
+  onMessageLister: () => void;
 }
 
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const RentActionCard = ({ rent, availableFrom, availableTo, listingId, ownerId }: RentActionCardProps) => {
-  const navigate = useNavigate();
-  const handleContactLister = async () => {
-    if(ownerId) {
-      navigate(`/inbox?recipientID=${ownerId}&listingID=${listingId}`);
-    }
-  };
+const RentActionCard = ({ rent, availableFrom, availableTo, onMessageLister }: RentActionCardProps) => {
   return (
     <div className="card border-t-4 border-t-[var(--primary)] animate-slide-up">
       <div className="mb-6">
@@ -210,7 +203,7 @@ const RentActionCard = ({ rent, availableFrom, availableTo, listingId, ownerId }
         </div>
       </div>
 
-      <button className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
+      <button onClick={onMessageLister} className="btn btn-primary w-full py-3 text-lg shadow-lg shadow-green-900/10 mb-3">
         Message Lister
       </button>
       <button className="btn btn-outline w-full py-2.5">
@@ -228,7 +221,7 @@ interface OwnerProfileCardProps {
   owner: {
     id: string;
     name: string;
-    avatar: string;
+    avatar?: string;
     bio: string;
     tags: string[];
   };
@@ -239,11 +232,19 @@ const OwnerProfileCard = ({ owner }: OwnerProfileCardProps) => {
     <div className="card animate-slide-up delay-100">
       <h3 className="font-bold text-[var(--text-main)] mb-4">Meet the Lister</h3>
       <div className="flex items-center gap-4 mb-4">
-        <img 
-          src={owner.avatar} 
-          alt={owner.name} 
-          className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]"
-        />
+        {owner.avatar ? (
+          <img 
+            src={owner.avatar} 
+            alt={owner.name} 
+            className="w-16 h-16 rounded-full object-cover border-2 border-[var(--surface)] ring-2 ring-[var(--border)]"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full border-2 border-[var(--surface)] ring-2 ring-[var(--border)] flex items-center justify-center bg-[var(--surface)]">
+             <span className="text-xl font-bold text-[var(--text-main)]">
+               {owner.name ? owner.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+             </span>
+          </div>
+        )}
         <div>
           <p className="font-bold text-lg">{owner.name}</p>
           <p className="text-xs text-[var(--text-muted)]">Verified Student</p>
@@ -312,48 +313,41 @@ const useFetchListing = (id: string | undefined) => {
       return;
     }
     const fetchListing = async () => {
-      try{
-        setLoading(true);
-        const data = await apiFetch(`/api/listings/${id}`);
+      setLoading(true);
+      if (!id) return;
+      try {
+        const backendListing = await apiFetch(`/api/listings/${id}`);
 
-        const mappedListing: ListingDetailData = {
-          ...data,
-          id: data.id.toString(),
-          // 1. Fix Image Mapping (handle empty strings)
-          images: data.images ? data.images.split(",").filter((img: string) => img.trim() !== "") : [],
-          
-          // 2. Fix Roommate Count (Backend uses singular 'roommate_count')
-          roommates_count: data.roommate_count || 0,
-          
-          // 3. Synthesize Owner object from flat backend fields
-          owner: data.anonymous_lister ? undefined : {
-            id: data.user_id.toString(),
-            name: `${data.lister_first_name} ${data.lister_last_name}`,
-            avatar: `https://ui-avatars.com/api/?name=${data.lister_first_name}+${data.lister_last_name}&background=random`,
-            bio: "Student at Sublea", // Placeholder as 'bio' isn't in current DB
-            tags: ['Verified Student', data.city].filter(Boolean)
-          },
-
-          // 4. Map Coordinates (Backend uses latitude/longitude)
-          coordinates: {
-            lat: data.latitude || 0,
-            lng: data.longitude || 0
-          },
-
-          // 5. Handle Amenities (If not in DB yet, provide a fallback)
-          amenities: data.amenities 
-            ? data.amenities.split(",").filter((a: string) => a.trim() !== "") 
-            : ['Furnished', 'Utilities Included', 'WiFi'],
-            
-          // Ensure dates are strings for the UI
-          available_from: data.available_from,
-          available_to: data.available_to,
+        const mockListing: ListingDetailData = {
+          id: backendListing.id.toString(),
+          title: backendListing.title,
+          rent: backendListing.rent,
+          address: backendListing.address,
+          bedrooms: backendListing.bedrooms,
+          bathrooms: backendListing.bathrooms,
+          roommates_count: backendListing.roommate_count,
+          available_from: backendListing.available_from,
+          available_to: backendListing.available_to,
+          images: backendListing.images ? backendListing.images.split(',') : [
+            'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=2560&auto=format&fit=crop',
+          ],
+          anonymous_lister: backendListing.anonymous_lister,
+          is_verified: true, // Mocked for now
+          description: backendListing.description || 'No description provided.',
+          amenities: ['In-unit Washer/Dryer', 'High-speed WiFi'],
+          coordinates: { lat: backendListing.latitude || 44.0448, lng: backendListing.longitude || -123.0726 }, 
+          owner: {
+             id: backendListing.user_id.toString(),
+             name: backendListing.lister_first_name ? `${backendListing.lister_first_name} ${backendListing.lister_last_name}` : 'Unknown Lister',
+             avatar: backendListing.lister_profile_picture || undefined,
+             bio: 'Sublea User',
+             tags: ['Verified']
+          }
         };
 
-        setListing(mappedListing);
+        setListing(mockListing);
       } catch (error) {
-        console.error("Error fetching listing details:", error);
-        setListing(null);
+        console.error("Failed to fetch listing:", error);
       } finally {
         setLoading(false);
       }
@@ -418,8 +412,7 @@ export const ListingDetail = () => {
               rent={listing.rent}
               availableFrom={listing.available_from}
               availableTo={listing.available_to}
-              listingId={listing.id}
-              ownerId={listing.owner?.id}
+              onMessageLister={() => navigate('/inbox', { state: { listingId: listing.id, targetId: listing.owner?.id, targetName: listing.owner?.name, targetAvatar: listing.owner?.avatar, listingTitle: listing.title, startNewConversation: true }})}
             />
 
             {/* Owner Profile Card */}

@@ -391,8 +391,13 @@ const useListings = () => {
   }, []);
 
   const deleteListing = async (id: string) => {
-    // Optional: await apiFetch(`/api/listings/${id}`, { method: 'DELETE' });
-    setListings(prev => prev.filter(l => l.id !== id));
+    try {
+      await apiFetch(`/api/listings/${id}`, { method: 'DELETE' });
+      setListings(prev => prev.filter(l => l.id !== id));
+    } catch (error) {
+      console.error("Failed to delete listing", error);
+      alert("Could not delete listing. Please try again.");
+    }
   };
 
   return { listings, isLoading, deleteListing };

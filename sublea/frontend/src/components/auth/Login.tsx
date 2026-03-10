@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../../api/client';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 interface LoginFormData {
   email: string;
