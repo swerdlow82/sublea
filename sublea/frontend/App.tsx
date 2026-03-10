@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 
 // Layout
 import { Layout } from './src/components/layout/Layout';
+import { Toaster } from 'react-hot-toast';
 
 // Auth Components
 import { Login } from './src/components/auth/Login';
@@ -18,10 +19,14 @@ import { Inbox } from './src/components/messages/Inbox';
 import { ListingDetail } from './src/components/listings/ListingDetail';
 import { MyListings } from './src/components/dashboard/MyListings';
 import { Settings } from './src/components/profile/Settings';
-
+import { Contact } from './src/components/common/Contact';
+import { PrivacyPolicy } from './src/components/legal/PrivacyPolicy';
+import { TermsOfService } from './src/components/legal/TermsOfService';
+import { HelpCenter } from './src/components/legal/HelpCenter';
 const App = (): React.ReactElement => {
   return (
     <Layout>
+      <Toaster position="top-right" />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
@@ -30,7 +35,10 @@ const App = (): React.ReactElement => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify" element={<Verification />} />
-
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/help" element={<HelpCenter />} />
         {/* Protected Routes */}
         <Route 
           path="/dashboard" 

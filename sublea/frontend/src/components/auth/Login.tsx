@@ -1,6 +1,8 @@
 import { useState, FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
 
 interface LoginFormData {
   email: string;
@@ -11,10 +13,6 @@ interface LoginFormData {
 interface PasswordToggleButtonProps {
   showPassword: boolean;
   onClick: () => void;
-}
-
-interface LoadingSpinnerProps {
-  className?: string;
 }
 
 const EMAIL_REGEX = /\S+@\S+\.\S+/;
@@ -39,13 +37,6 @@ const PasswordToggleButton = ({ showPassword, onClick }: PasswordToggleButtonPro
   </button>
 );
 
-const LoadingSpinner = ({ className = "h-4 w-4" }: LoadingSpinnerProps) => (
-  <svg className={`animate-spin ${className} text-white`} fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-);
-
 const validateLoginForm = (formData: LoginFormData): string | null => {
   if (!formData.email || !formData.password) {
     return 'Please fill in all fields.';
@@ -59,6 +50,8 @@ const validateLoginForm = (formData: LoginFormData): string | null => {
 };
 
 export const Login = () => {
+  const auth = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
@@ -86,43 +79,27 @@ export const Login = () => {
     // Response: { access_token: string, token_type: string }
     // Action: Store token in localStorage/cookie and redirect
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+      const data = await apiFetch("/api/login", {
+        method: "POST",
         body: JSON.stringify({
           email: formData.email,
           password: formData.password
         })
       });
 
-      console.log(`Login API response status: ${response.status}`);
-      console.log(`Login API response headers: ${JSON.stringify(response.headers)}`);
-
-
-
-      
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed. Please try again.');
-      }
-      
-      const data = await response.json();
-      console.log('Login API response data:', data);
-
+      // Persist token to the correct storage bucket based on "Remember me"
       const storage = formData.rememberMe ? localStorage : sessionStorage;
-      storage.setItem('authToken', data.access_token);
-      storage.setItem('user', JSON.stringify({ email: formData.email }));
-      console.log('Login successful. Access token stored.');
 
-      if(data.user.is_verified) {
-        window.location.href = '/dashboard';
+
+      // Hydrate AuthContext with the full user object returned by the API
+      auth.login(data.access_token, data.user, formData.rememberMe);
+
+      if (data.user?.is_verified) {
+        navigate('/dashboard');
       } else {
-        window.location.href = '/verify';
+        // Pass email so Verification page can display it and call resend correctly
+        navigate('/verify', { state: { email: formData.email } });
       }
-      
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An unexpected error occurred');
       setIsLoading(false);

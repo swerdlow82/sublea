@@ -34,13 +34,23 @@ class UserResponse(BaseModel):
     is_verified: bool
     age: int
     gender: str
-    gender_preference: str
+    gender_preference: Optional[str] = None
     first_name: str
     last_name: str
     created_at: datetime
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    age: Optional[int] = Field(None, ge=13, le=120)
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    gender: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -124,6 +134,17 @@ class ListingCreate(BaseModel):
     available_to: Optional[datetime]
     images: Optional[str]  # Comma-separated image URLs
     anonymous_lister: Optional[bool] = False
+    gender_preference: Optional[str] = None
+    cleaning_habit: Optional[str] = None
+    smoking_habit: Optional[str] = None
+    pet_preference: Optional[str] = None
+    drinking_habit: Optional[str] = None
+    noise_tolerance: Optional[str] = None
+    bed_time: Optional[str] = None
+    wake_time: Optional[str] = None
+    age_preference_min: Optional[int] = None
+    age_preference_max: Optional[int] = None
+    amenities: Optional[str] = None # Comma-separated amenities
 
     class Config:
         json_schema_extra = {
@@ -169,6 +190,19 @@ class ListingResponse(BaseModel):
     available_to: Optional[datetime]
     images: Optional[str]  # Comma-separated image URLs
     anonymous_lister: Optional[bool] = False
+    
+    gender_preference: Optional[str] = None
+    cleaning_habit: Optional[str] = None
+    smoking_habit: Optional[str] = None
+    pet_preference: Optional[str] = None
+    drinking_habit: Optional[str] = None
+    noise_tolerance: Optional[str] = None
+    bed_time: Optional[str] = None
+    wake_time: Optional[str] = None
+    age_preference_min: Optional[int] = None
+    age_preference_max: Optional[int] = None
+    amenities: Optional[str] = None
+    
     created_at: datetime
     deleted_at: Optional[datetime]
 
@@ -177,7 +211,6 @@ class ListingResponse(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    sender_id: int
     recipient_id: int
     listing_id: int
     content: str = Field(..., min_length=1, max_length=2000)
@@ -185,7 +218,6 @@ class MessageCreate(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "sender_id": 1,
                 "recipient_id": 2,
                 "listing_id": 3,
                 "content": "Hi! I'm interested in your listing—can we chat?"
@@ -201,6 +233,18 @@ class MessageResponse(BaseModel):
     content: str
     sent_at: datetime
     read: bool
+
+    class Config:
+        from_attributes = True
+
+class ConversationResponse(BaseModel):
+    other_user: UserResponse
+    latest_message: MessageResponse
+    unread_count: int
+    listing_id: int
+    listing_deleted: bool = False
+    listing_title: str = ""
+    other_user_is_lister: bool = False  # True when the other_user owns the listing
 
     class Config:
         from_attributes = True

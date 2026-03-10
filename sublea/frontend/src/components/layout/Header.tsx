@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 interface LogoProps {
   onClick: () => void;
@@ -19,8 +20,6 @@ interface MobileMenuButtonProps {
 }
 
 interface AuthActionsProps {
-  isLoggedIn: boolean;
-  onLogout: () => void;
   isMobile?: boolean;
 }
 
@@ -61,21 +60,82 @@ const MobileMenuButton = ({ isOpen, onClick }: MobileMenuButtonProps) => (
   </button>
 );
 
-const AuthActions = ({ isLoggedIn, onLogout, isMobile = false }: AuthActionsProps) => {
-  if (isLoggedIn) {
-    return (
-      <div className={isMobile ? "space-y-3" : "flex items-center gap-3"}>
-        <button
-          onClick={onLogout}
-          className={isMobile ? "btn btn-outline w-full justify-center" : "text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]"}
-        >
-          Log out
-        </button>
-        {!isMobile && (
-          <button className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface)] border border-[var(--border)] hover:border-primary transition-colors">
-            <span className="text-sm font-bold text-[var(--text-main)]">JD</span>
+const AuthActions = ({ isMobile = false }: AuthActionsProps) => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setIsDropdownOpen(false);
+    navigate('/');
+  };
+
+  if (user) {
+    const initials = `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase() || 'U';
+    
+    if (isMobile) {
+      return (
+        <div className="space-y-3">
+          <Link to="/settings" className="block rounded-md px-3 py-2 text-base font-medium text-[var(--text-main)] hover:bg-[var(--surface)]">
+            Profile
+          </Link>
+          <Link to="/dashboard" className="block rounded-md px-3 py-2 text-base font-medium text-[var(--text-main)] hover:bg-[var(--surface)]">
+            My Dashboard
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="btn btn-outline w-full justify-center"
+          >
+            Sign out
           </button>
-        )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-4">
+        <Link to="/settings" className="text-sm font-medium text-[var(--text-muted)] hover:text-primary transition-colors">
+          Profile
+        </Link>
+        <Link to="/dashboard" className="text-sm font-medium text-[var(--text-muted)] hover:text-primary transition-colors">
+          My Dashboard
+        </Link>
+        
+        <div className="relative" ref={dropdownRef}>
+          <button 
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface)] border border-[var(--border)] hover:border-primary transition-colors overflow-hidden"
+          >
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt="Profile" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-[var(--text-main)]">{initials}</span>
+            )}
+          </button>
+          
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-48 rounded-md bg-[var(--surface)] shadow-lg ring-1 ring-black ring-opacity-5 py-1 box-border border border-[var(--border)]">
+              <button
+                onClick={handleLogout}
+                className="block w-full text-left px-4 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--surface-hover)]"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -109,17 +169,15 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   { label: 'Listings', href: '/browse', target: '/browse' },
   { label: 'How it Works', href: '/#how-it-works', target: '#how-it-works' },
   { label: 'FAQ', href: '/#faq', target: '#faq' },
+  { label: 'Messages', href: '/inbox', target: '/inbox' },
 ];
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-
-  const handleLogout = () => setIsLoggedIn(false);
 
   const handleLogoClick = () => navigate('/');
 
@@ -189,7 +247,7 @@ export const Header = () => {
         </nav>
 
         <div className="hidden md:flex items-center gap-4">
-          <AuthActions isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+          <AuthActions />
         </div>
 
         <MobileMenuButton isOpen={isMenuOpen} onClick={toggleMenu} />
@@ -210,7 +268,7 @@ export const Header = () => {
             ))}
 
             <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3">
-              <AuthActions isLoggedIn={isLoggedIn} onLogout={handleLogout} isMobile />
+              <AuthActions isMobile />
             </div>
           </div>
         </div>
