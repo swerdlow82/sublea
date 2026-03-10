@@ -45,28 +45,8 @@ load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
-# Migration to add new columns to existing listings table in SQLite
-with engine.connect() as conn:
-    migrate_statements = [
-        "ALTER TABLE listings ADD COLUMN gender_preference VARCHAR(50)",
-        "ALTER TABLE listings ADD COLUMN cleaning_habit VARCHAR(50)",
-        "ALTER TABLE listings ADD COLUMN smoking_habit VARCHAR(50)",
-        "ALTER TABLE listings ADD COLUMN pet_preference VARCHAR(20)",
-        "ALTER TABLE listings ADD COLUMN drinking_habit VARCHAR(20)",
-        "ALTER TABLE listings ADD COLUMN noise_tolerance VARCHAR(20)",
-        "ALTER TABLE listings ADD COLUMN bed_time VARCHAR(50)",
-        "ALTER TABLE listings ADD COLUMN wake_time VARCHAR(20)",
-        "ALTER TABLE listings ADD COLUMN age_preference_min INTEGER",
-        "ALTER TABLE listings ADD COLUMN age_preference_max INTEGER",
-        "ALTER TABLE listings ADD COLUMN amenities TEXT",
-    ]
-    for statement in migrate_statements:
-        try:
-            conn.execute(text(statement))
-            conn.commit()
-        except Exception:
-            # Column likely already exists
-            pass
+
+
 
 app = FastAPI(title="Sublea Backend API", version="1.0.0", description="Student exclusive subletting marketplace API")
 
