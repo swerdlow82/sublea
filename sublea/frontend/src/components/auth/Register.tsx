@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../api/client';
-
+import { useAuth } from '../../context/AuthContext';
 
 interface RegisterFormData {
   email: string;
@@ -68,7 +68,7 @@ const getStrengthColor = (strength: number): string => {
 };
 
 const PasswordStrengthIndicator = ({ strength }: PasswordStrengthIndicatorProps) => (
-  <div className="mt-2 flex gap-1 h-1 w-full rounded-full overflow-hidden bg-gray-200">
+  <div className="mt-2 flex gap-1 h-1 w-full rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
     <div 
       className={`h-full transition-all duration-300 ${getStrengthColor(strength)}`} 
       style={{ width: `${(strength / 5) * 100}%` }}
@@ -140,6 +140,7 @@ const validateForm = (formData: RegisterFormData): FormErrors => {
 };
 
 export const Register = () => {
+  const auth = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState<RegisterFormData>({
     email: '',
@@ -193,14 +194,12 @@ export const Register = () => {
         });
         console.log("Registration successful:", data);
 
-        // save token and email to test log in 
-        localStorage.setItem("authToken", data.access_token);
-        localStorage.setItem("user", JSON.stringify({
-          email: formData.email 
-        }));
+        // Save token to test log in 
+
+        auth.login(data.access_token, data.user || { email: formData.email });
         
-        // verify page 
-        navigate("/verify", { state: { email: formData.email } });
+        // Navigate to verify page, passing the email in state
+        navigate('/verify', { state: { email: formData.email } });
 
       } catch (error ) {
         const errorMessage = error instanceof Error ? error.message : "Registration failed";
@@ -363,7 +362,7 @@ export const Register = () => {
             </div>
             <div className="ml-2 text-sm">
               <label htmlFor="terms" className="text-[var(--text-main)]">
-                I agree to the <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                I agree to the <Link target="_blank" to="/terms" className="text-primary hover:underline">Terms of Service</Link> and <Link target="_blank" to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
               </label>
               {errors.terms && <p className="text-xs text-red-500 mt-1">{errors.terms}</p>}
             </div>

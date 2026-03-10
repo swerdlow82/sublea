@@ -59,9 +59,9 @@
     /* Darker Champagne equivalent for dark mode surface */
     --secondary-foreground: #FEF3C7;
 
-    --background: #0A0A0A;
-    --surface: #1A1A1A;
-    --surface-glass: rgba(26, 26, 26, 0.6);
+    --background: #0F172A; /* Slate 900 for softer dark mode */
+    --surface: #1E293B; /* Slate 800 for surface */
+    --surface-glass: rgba(30, 41, 59, 0.6);
 
     --text-main: #F8FAFC;
     --text-muted: #94A3B8;
@@ -350,4 +350,13 @@ h6 {
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ─── Google Maps Error Suppression ──────────────────────────────────────────
+   When the API key is invalid/unactivated, Google renders a white "Oops!"
+   error overlay inside the map container. We hide it so our own placeholder
+   (rendered by React before the map even loads) is visible instead.         */
+.gm-err-container,
+.gm-error-pane {
+  display: none !important;
 }

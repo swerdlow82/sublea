@@ -19,7 +19,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (token: string, userData: User) => void;
+  login: (token: string, userData: User, remember?: boolean) => void;
   logout: () => void;
   fetchUser: () => Promise<void>;
 }
@@ -51,10 +51,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fetchUser();
   }, []);
 
-  const login = (token: string, userData: User) => {
-    localStorage.setItem('authToken', token);
+  const login = (token: string, userData: User, remember = true) => {
+    const storage = remember ? localStorage : sessionStorage;
+    storage.setItem('authToken', token);
     setUser(userData);
-  };
+};
 
   const logout = () => {
     localStorage.removeItem('authToken');
@@ -76,3 +77,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+

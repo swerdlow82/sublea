@@ -1,9 +1,13 @@
 ## temp import models during dev (auth)
 # later to be replaced with migrations
+import shutil
+import uuid
+
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, desc, and_, text
 from database import Base, engine, get_db
-from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, UploadFile, File
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
@@ -35,6 +39,8 @@ from email_service import email_service
 from google_maps_utils import get_coordinates
 
 
+
+
 load_dotenv()
 
 Base.metadata.create_all(bind=engine)
@@ -63,6 +69,9 @@ with engine.connect() as conn:
             pass
 
 app = FastAPI(title="Sublea Backend API", version="1.0.0", description="Student exclusive subletting marketplace API")
+
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 class ConnectionManager:
     def __init__(self):
@@ -111,6 +120,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 @app.get("/")
 def root():
@@ -671,6 +682,18 @@ def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), curr
     db.commit()
     db.refresh(new_listing)
     return ListingResponse.from_orm(new_listing)
+
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile =File(...), current_user: User = Depends(get_current_user)):
+    ext = file.filename.split(".")[-1].lower()
+    if ext not in ["jpg", "jpeg", "png", "webp"]:
+        raise HTTPException(status_code=400, detail="Invalid image format. Only JPG, PNG, and WEBP are allowed.")
+    
+    filename = f"{uuid.uuid4()}.{ext}"
+    filepath = f"uploads/{filename}"
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"url": f"/uploads/{filename}"}
 
 @app.get("/pages/listings/new")
 def new_listing_page():

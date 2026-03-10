@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AddressAutocomplete } from '../common/AddressAutocomplete';
 
 // Type Definitions
 
@@ -13,7 +14,7 @@ interface SearchFormProps {
 
 const LaunchBadge = () => (
   <div className="inline-block mb-6">
-    <span className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium border border-white/30">
+    <span className="px-4 py-2 bg-white/20 dark:bg-black/30 backdrop-blur-sm rounded-full text-sm font-medium border border-white/30 dark:border-white/10">
       📍 Launching at University of Oregon
     </span>
   </div>
@@ -21,7 +22,7 @@ const LaunchBadge = () => (
 
 const HeroHeading = () => (
   <>
-    <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 tracking-tight drop-shadow-lg">
+    <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 tracking-tight drop-shadow-lg text-white">
       Find Your Home Near UO
     </h1>
     <p className="text-xl md:text-2xl mb-8 text-white/90 drop-shadow-md">
@@ -33,12 +34,12 @@ const HeroHeading = () => (
 const SearchForm = ({ searchQuery, onSearchQueryChange, onSubmit }: SearchFormProps) => (
   <form onSubmit={onSubmit} className="max-w-2xl mx-auto mb-6">
     <div className="flex flex-col sm:flex-row gap-3">
-      <input
-        type="text"
+      <AddressAutocomplete
         value={searchQuery}
         onChange={(e) => onSearchQueryChange(e.target.value)}
+        onSelect={(address) => onSearchQueryChange(address)}
         placeholder="Search by address or neighborhood..."
-        className="flex-1 px-6 py-4 rounded-xl text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 shadow-lg"
+        className="flex-1 w-full px-6 py-4 rounded-xl text-gray-900 dark:text-gray-100 dark:bg-gray-800 text-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 shadow-lg"
       />
       <button
         type="submit"
@@ -68,9 +69,11 @@ const CTAButtons = () => (
 );
 
 const TrustBadge = () => (
-  <p className="mt-8 text-sm text-white/70">
-    Verified .edu students only • Safe, simple, and transparent
-  </p>
+  <div className="mt-8 flex justify-center">
+    <p className="text-sm text-white/90 bg-black/30 backdrop-blur-sm rounded-full px-4 py-1">
+      Verified .edu students only • Safe, simple, and transparent
+    </p>
+  </div>
 );
 
 // Main Component
@@ -84,7 +87,7 @@ export const Value = () => {
   const handleSearch = (e: React.FormEvent): void => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/browse?location=eugene&query=${encodeURIComponent(searchQuery)}`);
+      navigate(`/browse?location=${encodeURIComponent(searchQuery)}`);
     } else {
       navigate('/browse');
     }
@@ -92,16 +95,14 @@ export const Value = () => {
 
   return (
     <section className="relative rounded-3xl overflow-hidden min-h-[500px] md:min-h-[600px] flex items-center justify-center">
-      {/* Background Image with Placeholder stock IMG - TODO */}
+      {/* Hero background – campus neighborhood scene */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1600&h=900&fit=crop)',
-        }}
+        style={{ backgroundImage: 'url(/value.webp)' }}
       />
 
-      {/* Dark Overlay TBD */}
-      <div className="absolute inset-0 bg-black/50" />
+      {/* Dark overlay for text legibility */}
+      <div className="absolute inset-0 bg-black/60" />
 
       {/* Content */}
       <div className="relative z-10 max-w-4xl mx-auto px-6 md:px-8 text-center text-white">
