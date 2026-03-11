@@ -65,14 +65,15 @@ export const useCreateListing = () => {
     formData.append('file', file);
     
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-    const res = await fetch('http://127.0.0.1:8000/api/upload-image', {
+    const BACKEND_URL = 'https://sublea-backend-195762234659.us-east1.run.app';
+    const res = await fetch(`${BACKEND_URL}/api/upload-image`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
     if (!res.ok) throw new Error('Image upload failed');
     const data = await res.json();
-    return `http://127.0.0.1:8000${data.url}`;
+    return data.url
   });
 
   Promise.all(uploads)

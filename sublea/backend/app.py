@@ -94,6 +94,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8000",
+        "https://sublea-frontend-195762234659.us-east1.run.app",
         ""
     ],
     allow_credentials=True,
@@ -105,7 +106,13 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Sublea Backend API is running.", "version":"1.0.0"}
+    return {
+        "status": "ok",
+        "message": "Sublea Backend API is running.",
+        "env_backend_url": os.getenv("BACKEND_URL"),
+        "env_frontend_url": os.getenv("FRONTEND_URL"),
+        "current_time": datetime.now().isoformat()
+    }
 
 
 def generate_verification_code():
@@ -664,16 +671,19 @@ def create_listing(user_data: ListingCreate, db: Session = Depends(get_db), curr
     return ListingResponse.from_orm(new_listing)
 
 @app.post("/api/upload-image")
-async def upload_image(file: UploadFile =File(...), current_user: User = Depends(get_current_user)):
+async def upload_image(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     ext = file.filename.split(".")[-1].lower()
     if ext not in ["jpg", "jpeg", "png", "webp"]:
-        raise HTTPException(status_code=400, detail="Invalid image format. Only JPG, PNG, and WEBP are allowed.")
+        raise HTTPException(status_code=400, detail="Invalid image format.")
     
     filename = f"{uuid.uuid4()}.{ext}"
     filepath = f"uploads/{filename}"
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    return {"url": f"/uploads/{filename}"}
+        
+    # Get the base URL from the environment, defaulting to local if not set
+    base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    return {"url": f"{base_url}/uploads/{filename}"}
 
 @app.get("/pages/listings/new")
 def new_listing_page():

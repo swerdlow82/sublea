@@ -1,0 +1,11 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build', 
+    '-t', 'us-east1-docker.pkg.dev/$PROJECT_ID/sublea-repo/frontend',
+    '--build-arg', '_VITE_API_URL=$_VITE_API_URL',
+    '--build-arg', '_VITE_GOOGLE_MAPS_API_KEY=$_VITE_GOOGLE_MAPS_API_KEY',
+    '.'
+  ]
+images:
+- 'us-east1-docker.pkg.dev/$PROJECT_ID/sublea-repo/frontend'

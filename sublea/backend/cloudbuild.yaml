@@ -1,0 +1,24 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/sublea-backend', '.']
+  
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/sublea-backend']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'sublea-backend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/sublea-backend'
+      - '--region'
+      - 'us-east1'
+
+# THIS IS THE FIX FOR YOUR ERROR:
+options:
+  logging: CLOUD_LOGGING_ONLY
