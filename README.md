@@ -1,8 +1,7 @@
 # sublea
 A platform for students to post and find subleases.
 
-## Live Version
-https://sublea-frontend-195762234659.us-east1.run.app/
+
 
 
 ## How to Run Locally, Docker Implementation
